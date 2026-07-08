@@ -1,7 +1,7 @@
 /* Queijaria — service worker.
    IMPORTANTE: ao dar deploy, suba o número aqui JUNTO com o APP_VER do index.html,
    senão o PWA continua servindo a versão velha. */
-const CACHE = "queijaria-shell-v3";
+const CACHE = "queijaria-shell-v4";
 const SHELL = ["./", "./index.html", "./manifest.json", "./icon.svg", "./logo.png"];
 
 self.addEventListener("install", (e) => {
