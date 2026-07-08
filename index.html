@@ -190,6 +190,19 @@ input,select{font-family:inherit;font-size:16px}
   padding:14px 14px 8px;margin-bottom:12px;box-shadow:var(--sombra)}
 .graf-cab{margin-bottom:8px}
 .mini-add{display:inline-grid;place-items:center;width:22px;height:22px;border-radius:7px;background:var(--ouro);color:#fff;border:none;font-size:1rem;font-weight:800;margin-right:7px;vertical-align:-3px;cursor:pointer;font-family:inherit;line-height:1}
+.splash{display:grid;place-items:center;gap:14px;animation:splashIn .5s ease-out both}
+.splash-logo{width:118px;height:118px;object-fit:contain;border-radius:26px;
+  animation:logoPulse 2.2s ease-in-out .5s infinite}
+.splash-nome{font-size:1.25rem;font-weight:700;color:var(--tinta);opacity:0;
+  animation:nomeSobe .55s ease-out .25s forwards}
+.splash-barra{width:120px;height:4px;border-radius:4px;background:var(--linha);overflow:hidden;opacity:0;
+  animation:nomeSobe .5s ease-out .45s forwards}
+.splash-barra i{display:block;width:44%;height:100%;border-radius:4px;background:var(--ouro);
+  animation:barraVai 1.1s ease-in-out .6s infinite}
+@keyframes splashIn{from{opacity:0}to{opacity:1}}
+@keyframes logoPulse{0%,100%{opacity:1}50%{opacity:.72}}
+@keyframes nomeSobe{from{opacity:0;translate:0 8px}to{opacity:1;translate:0 0}}
+@keyframes barraVai{0%{margin-left:-46%}100%{margin-left:102%}}
 .link-forn{text-decoration:underline dotted var(--ouro);text-underline-offset:3px;cursor:pointer}
 .ciclo-cab{display:flex;justify-content:space-between;align-items:center;background:var(--card);
   border:1px solid var(--linha);border-radius:12px;padding:10px 12px;margin:12px 0 6px;box-shadow:var(--sombra)}
@@ -210,7 +223,11 @@ input,select{font-family:inherit;font-size:16px}
 
 <!-- CARREGANDO -->
 <div id="tela-carregando" class="centro">
-  <div class="marca"><div class="spin"></div></div>
+  <div class="splash">
+    <img src="logo.png" alt="" class="splash-logo" onerror="this.style.display='none'">
+    <div class="splash-nome serif">Queijaria Bene</div>
+    <div class="splash-barra"><i></i></div>
+  </div>
 </div>
 
 <!-- LOGIN / CADASTRO -->
@@ -314,7 +331,7 @@ input,select{font-family:inherit;font-size:16px}
    ======================================================================= */
 const SUPABASE_URL      = "https://cadnmgaymgljmoadebkk.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uBKKvD_e5ef4326TvkFgcg_rRnjmTus";
-const APP_VER = "v17";                              // suba junto com o cache do sw.js
+const APP_VER = "v18";                              // suba junto com o cache do sw.js
 
 /* ===================== estado ===================== */
 let sb = null;
