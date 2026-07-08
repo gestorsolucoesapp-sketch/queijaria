@@ -338,7 +338,7 @@ input,select{font-family:inherit;font-size:16px}
    ======================================================================= */
 const SUPABASE_URL      = "https://cadnmgaymgljmoadebkk.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uBKKvD_e5ef4326TvkFgcg_rRnjmTus";
-const APP_VER = "v20";
+const APP_VER = "v21";
 const SPLASH_MIN = 2400;
 const splashT0 = Date.now();                              // suba junto com o cache do sw.js
 
@@ -1861,7 +1861,7 @@ function abrirModalLote(){
     toast("Cadastre um queijo primeiro.");
     irPara("cadastro"); cadAba = "queijos"; renderCadastro(); setTimeout(() => abrirModalQueijo(), 250); return;
   }
-  const opcoes = state.tipos.map(t=>`<option value="${t.id}">${esc(t.nome)} (${t.dias_cura}d)</option>`).join("");
+  const opcoes = `<option value="" selected disabled>Escolha o queijo…</option>` + state.tipos.map(t=>`<option value="${t.id}">${esc(t.nome)} (${t.dias_cura}d)</option>`).join("");
   abrirFolha(`
     <h2>Novo lote de produção</h2>
     <p class="dica">A data em que fica pronto é calculada pelos dias de cura do tipo.</p>
