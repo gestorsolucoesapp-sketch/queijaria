@@ -189,6 +189,9 @@ input,select{font-family:inherit;font-size:16px}
 .graf-card{background:var(--card);border:1px solid var(--linha);border-radius:var(--r);
   padding:14px 14px 8px;margin-bottom:12px;box-shadow:var(--sombra)}
 .graf-cab{margin-bottom:8px}
+.mini-acao{display:grid;place-items:center;width:30px;height:30px;border-radius:9px;border:1px solid var(--linha);
+  background:var(--card);color:var(--tinta-mole);cursor:pointer;flex:none;margin-left:4px}
+.mini-acao.del{color:var(--vermelho);border-color:rgba(192,57,43,.3)}
 .mini-add{display:inline-grid;place-items:center;width:22px;height:22px;border-radius:7px;background:var(--ouro);color:#fff;border:none;font-size:1rem;font-weight:800;margin-right:7px;vertical-align:-3px;cursor:pointer;font-family:inherit;line-height:1}
 .splash{display:grid;place-items:center;gap:14px;animation:splashIn .5s ease-out both}
 .splash-logo{width:168px;height:168px;object-fit:contain;border-radius:34px;
@@ -358,7 +361,7 @@ input,select{font-family:inherit;font-size:16px}
    ======================================================================= */
 const SUPABASE_URL      = "https://cadnmgaymgljmoadebkk.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uBKKvD_e5ef4326TvkFgcg_rRnjmTus";
-const APP_VER = "v29";
+const APP_VER = "v30";
 const SPLASH_MIN = 2400;
 const splashT0 = Date.now();                              // suba junto com o cache do sw.js
 
@@ -1156,7 +1159,7 @@ function renderLeiteAPagar(corpo){
 }
 
 function abrirGrupoRecebimentos(g){
-  // somar por dia; expandir pra ver/editar as entregas
+  // somar por dia; ações direto na lista
   const porDia = {};
   g.itens.forEach(r => {
     if(!porDia[r.data]) porDia[r.data] = { litros:0, valor:0, itens:[] };
@@ -1166,26 +1169,30 @@ function abrirGrupoRecebimentos(g){
   });
   const linhas = Object.keys(porDia).sort().reverse().map(d => {
     const x = porDia[d];
-    const unico = x.itens.length === 1;
     const filhos = x.itens.map(r => `
-      <div class="tipo sub-ent" data-editrec="${r.id}" style="display:flex;padding:8px 12px;margin-left:14px">
-        <div><div class="det">${num(r.litros)} L × ${brl(r.preco_litro)}/L</div></div>
-        <div class="preco" style="font-size:.8rem">${brl(r.valor_total)}</div>
+      <div class="tipo sub-ent" style="display:flex;padding:8px 12px;margin-left:14px;align-items:center">
+        <div style="flex:1"><div class="det">${num(r.litros)} L × ${brl(r.preco_litro)}/L</div></div>
+        <div class="preco" style="font-size:.8rem;margin-right:6px">${brl(r.valor_total)}</div>
+        <button class="mini-acao" data-editrec="${r.id}" title="Editar">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.8 2.8 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
+        </button>
+        <button class="mini-acao del" data-delrec="${r.id}" title="Apagar">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+        </button>
       </div>`).join("");
-    return `<div class="tipo" style="padding:10px 12px" data-dia="${d}" ${unico?`data-editrec="${x.itens[0].id}"`:""}>
+    return `<div class="tipo" style="padding:10px 12px" data-dia="${d}">
       <div><div class="nome" style="font-size:.85rem">${dataBR(d)}</div>
-      <div class="det">${num(x.litros)} L${unico?` × ${brl(x.itens[0].preco_litro)}/L`:` · ${x.itens.length} entregas — toque pra abrir`}</div></div>
+      <div class="det">${num(x.litros)} L · ${x.itens.length===1?"1 entrega":x.itens.length+" entregas"}</div></div>
       <div class="preco">${brl(x.valor)}</div>
-    </div>${unico?"":filhos}`;
+    </div>${filhos}`;
   }).join("");
   abrirFolha(`
     <h2>${esc(nomeForn(g.fid))}</h2>
     <p class="dica" style="margin-top:-6px">Pagamento ${dataBR(g.venc)} · ${num(g.litros)} L — total <b>${brl(g.valor)}</b></p>
     <div class="rotulo">Entregas por dia</div>
     <div style="max-height:44vh;overflow-y:auto" id="grupo-lista">${linhas}</div>
-    <p class="dica">Toque num dia pra ver ou editar as entregas.</p>`);
+    <p class="dica">Lápis edita, lixeira apaga (pede senha). Toque no dia pra recolher.</p>`);
   $$("#grupo-lista [data-dia]").forEach(el => {
-    if(el.dataset.editrec){ el.onclick = () => abrirModalRecebimento(el.dataset.editrec); return; }
     el.onclick = () => {
       let n = el.nextElementSibling;
       while(n && n.classList.contains("sub-ent")){
@@ -1194,7 +1201,8 @@ function abrirGrupoRecebimentos(g){
       }
     };
   });
-  $$("#grupo-lista .sub-ent").forEach(el => el.onclick = (e) => { e.stopPropagation(); abrirModalRecebimento(el.dataset.editrec); });
+  $$("#grupo-lista [data-editrec]").forEach(b => b.onclick = (e) => { e.stopPropagation(); abrirModalRecebimento(b.dataset.editrec); });
+  $$("#grupo-lista [data-delrec]").forEach(b => b.onclick = (e) => { e.stopPropagation(); confirmarComSenha("Apagar esta entrega de leite?", () => excluirRecebimento(b.dataset.delrec)); });
 }
 
 async function marcarPagoGrupo(ids){
