@@ -176,6 +176,8 @@ input,select{font-family:inherit;font-size:16px}
 .subnav a{flex:1;text-align:center;padding:9px 4px;border-radius:9px;font-size:.8rem;font-weight:600;color:var(--tinta);opacity:.5;cursor:pointer;white-space:nowrap;transition:all .15s}
 .subnav a.ativo{background:var(--ouro);color:#fff;opacity:1}
 .tipo .ver{color:var(--tinta-mole);font-size:1.4rem;line-height:1;padding-left:8px}
+.verbadge{font-size:.62rem;font-weight:700;color:var(--tinta-mole);background:var(--linha);
+  padding:2px 6px;border-radius:20px;margin-left:6px;letter-spacing:.5px;vertical-align:middle}
 </style>
 </head>
 <body>
@@ -232,6 +234,7 @@ input,select{font-family:inherit;font-size:16px}
     <div class="tit">
       <svg width="26" height="26" viewBox="0 0 48 48" fill="none"><path d="M24 8 42 20v4H6v-4L24 8Z" fill="#D99A2B"/><path d="M6 24h36v10a4 4 0 0 1-4 4H10a4 4 0 0 1-4-4V24Z" fill="#B57A15"/></svg>
       <b id="topo-nome">Queijaria</b>
+      <span id="topo-ver" class="verbadge"></span>
     </div>
     <div class="topo-acoes">
       <button class="icone-btn" id="btn-privacidade" title="Ocultar valores"></button>
@@ -277,7 +280,7 @@ input,select{font-family:inherit;font-size:16px}
    ======================================================================= */
 const SUPABASE_URL      = "https://cadnmgaymgljmoadebkk.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uBKKvD_e5ef4326TvkFgcg_rRnjmTus";
-const APP_VER = "v3";                              // suba junto com o cache do sw.js
+const APP_VER = "v4";                              // suba junto com o cache do sw.js
 
 /* ===================== estado ===================== */
 let sb = null;
@@ -476,6 +479,7 @@ async function carregarTudo(){
 /* ===================== app / navegação ===================== */
 async function abrirApp(){
   $("#topo-nome").textContent = familiaNome;
+  $("#topo-ver").textContent = APP_VER;
   mostrarTela("app");
   atualizarOlho();
   await carregarTudo();
