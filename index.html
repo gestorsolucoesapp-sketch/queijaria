@@ -6,7 +6,7 @@
 <meta name="theme-color" content="#F5F2E9">
 <title>Queijaria da Família</title>
 <link rel="manifest" href="manifest.json">
-<link rel="apple-touch-icon" href="icon.svg">
+<link rel="apple-touch-icon" href="logo.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
@@ -189,6 +189,7 @@ input,select{font-family:inherit;font-size:16px}
 .graf-card{background:var(--card);border:1px solid var(--linha);border-radius:var(--r);
   padding:14px 14px 8px;margin-bottom:12px;box-shadow:var(--sombra)}
 .graf-cab{margin-bottom:8px}
+.mini-add{display:inline-grid;place-items:center;width:22px;height:22px;border-radius:7px;background:var(--ouro);color:#fff;border:none;font-size:1rem;font-weight:800;margin-right:7px;vertical-align:-3px;cursor:pointer;font-family:inherit;line-height:1}
 .link-forn{text-decoration:underline dotted var(--ouro);text-underline-offset:3px;cursor:pointer}
 .ciclo-cab{display:flex;justify-content:space-between;align-items:center;background:var(--card);
   border:1px solid var(--linha);border-radius:12px;padding:10px 12px;margin:12px 0 6px;box-shadow:var(--sombra)}
@@ -257,7 +258,7 @@ input,select{font-family:inherit;font-size:16px}
 <div id="app" class="hidden">
   <header class="topo">
     <div class="tit">
-      <svg width="26" height="26" viewBox="0 0 48 48" fill="none"><path d="M24 8 42 20v4H6v-4L24 8Z" fill="#D99A2B"/><path d="M6 24h36v10a4 4 0 0 1-4 4H10a4 4 0 0 1-4-4V24Z" fill="#B57A15"/></svg>
+      <img src="logo.png" alt="" style="width:30px;height:30px;border-radius:8px;object-fit:contain" onerror="this.style.display='none'">
       <b id="topo-nome">Queijaria</b>
       <span id="topo-ver" class="verbadge"></span>
     </div>
@@ -313,7 +314,7 @@ input,select{font-family:inherit;font-size:16px}
    ======================================================================= */
 const SUPABASE_URL      = "https://cadnmgaymgljmoadebkk.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uBKKvD_e5ef4326TvkFgcg_rRnjmTus";
-const APP_VER = "v15";                              // suba junto com o cache do sw.js
+const APP_VER = "v16";                              // suba junto com o cache do sw.js
 
 /* ===================== estado ===================== */
 let sb = null;
@@ -921,7 +922,7 @@ function renderLeiteAPagar(corpo){
         : `${g.itens.length} entregas · ${num(g.litros)} L`;
       return `<div class="tipo ${vencido?"vencido":""}" data-grupo="${k}">
         <div>
-          <div class="nome"><span class="link-forn" data-fdet="${g.fid}">${esc(nomeForn(g.fid))}</span> <span class="pill-venc ${vencido?"on":""}">${quando}</span></div>
+          <div class="nome"><button class="mini-add" data-addforn="${g.fid}">+</button><span class="link-forn" data-fdet="${g.fid}">${esc(nomeForn(g.fid))}</span> <span class="pill-venc ${vencido?"on":""}" data-prazoforn="${g.fid}">${quando}</span></div>
           <div class="det">${det}</div>
         </div>
         <div style="text-align:right">
@@ -942,6 +943,8 @@ function renderLeiteAPagar(corpo){
     e.stopPropagation(); marcarPagoGrupo(G[b.dataset.pagogrupo].itens.map(r=>r.id));
   });
   $$("#leite-corpo [data-fdet]").forEach(s => s.onclick = (e) => { e.stopPropagation(); abrirDetalheFornecedor(s.dataset.fdet); });
+  $$("#leite-corpo [data-addforn]").forEach(b => b.onclick = (e) => { e.stopPropagation(); abrirModalRecebimento(undefined, b.dataset.addforn); });
+  $$("#leite-corpo [data-prazoforn]").forEach(p => p.onclick = (e) => { e.stopPropagation(); abrirModalPrazo(p.dataset.prazoforn); });
 }
 
 function abrirGrupoRecebimentos(g){
@@ -1094,14 +1097,41 @@ function barrasSVG(valores, dias, cores){
   return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block">${barras}${rotulos}</svg>`;
 }
 
-function abrirModalRecebimento(id){
+function abrirModalPrazo(fid){
+  const f = state.fornecedores.find(x=>x.id===fid);
+  if(!f) return;
+  const atual = Number(f.prazo_pagamento)||30;
+  const chips = [1,7,15,30].map(p=>`<button type="button" class="seg-prazo ${p===atual?"on":""}" data-chip="${p}">${p===1?"1 dia":p+" dias"}</button>`).join("");
+  abrirFolha(`
+    <h2>Período de pagamento</h2>
+    <p class="dica" style="margin-top:-6px">${esc(f.nome)} — os vencimentos são recalculados na hora.</p>
+    <div class="seg-linha">${chips}</div>
+    <div class="campo"><label>Ou digite os dias que precisar</label><input id="pz-dias" type="number" inputmode="numeric" min="1" value="${atual}" placeholder="ex.: 17"></div>
+    <div class="erro" id="pz-erro"></div>
+    <button class="btn btn-primario" id="pz-salvar">Salvar</button>`);
+  $$(".seg-prazo[data-chip]").forEach(b => b.onclick = () => {
+    $("#pz-dias").value = b.dataset.chip;
+    $$(".seg-prazo[data-chip]").forEach(x=>x.classList.toggle("on", x===b));
+  });
+  $("#pz-salvar").onclick = async () => {
+    const dias = parseInt($("#pz-dias").value)||0;
+    if(dias < 1){ $("#pz-erro").textContent = "Informe pelo menos 1 dia."; return; }
+    const bak = f.prazo_pagamento; f.prazo_pagamento = dias;
+    fecharModal(); renderRecebimento(); toast(`Período de ${esc(f.nome)}: ${prazoRot(dias)}.`);
+    const { error } = await sb.from("fornecedores").update({ prazo_pagamento: dias }).eq("id", fid);
+    if(error){ f.prazo_pagamento = bak; renderRecebimento(); toast("Erro ao mudar o período: "+(error.message||"?"), true); }
+  };
+}
+
+function abrirModalRecebimento(id, fornPre){
   if(typeof id !== "string") id = undefined; // clique de botão não é id
   if(!state.fornecedores.length){
     toast("Cadastre um fornecedor primeiro.");
     irPara("cadastro"); cadAba = "fornecedores"; renderCadastro(); setTimeout(() => abrirModalFornecedor(), 250); return;
   }
   const r = state.recebimentos.find(x=>x.id===id) || {};
-  const opts = state.fornecedores.map(f=>`<option value="${f.id}" ${r.fornecedor_id===f.id?"selected":""}>${esc(f.nome)}</option>`).join("");
+  const selecionado = r.fornecedor_id || fornPre;
+  const opts = state.fornecedores.map(f=>`<option value="${f.id}" ${selecionado===f.id?"selected":""}>${esc(f.nome)}</option>`).join("");
   abrirFolha(`
     <h2>${id?"Editar":"Novo"} recebimento</h2>
     <div class="campo"><label>Fornecedor</label><select id="r-forn">${opts}</select></div>
@@ -1282,7 +1312,6 @@ function botaoExcluir(id, label){
 function abrirModalFornecedor(id){
   if(typeof id !== "string") id = undefined;
   const f = state.fornecedores.find(x=>x.id===id) || {};
-  const prazos = [1,7,15,30];
   abrirFolha(`
     <h2>${id?"Editar":"Novo"} fornecedor</h2>
     <div class="campo"><label>Nome</label><input id="f-nome" value="${esc(f.nome||"")}" placeholder="Ex.: Sítio do João"></div>
@@ -1290,8 +1319,8 @@ function abrirModalFornecedor(id){
       <div class="campo"><label>Cidade</label><input id="f-cidade" value="${esc(f.cidade||"")}"></div>
       <div class="campo"><label>Estado</label><input id="f-estado" maxlength="2" value="${esc(f.estado||"")}" placeholder="SP" style="text-transform:uppercase"></div>
     </div>
-    <div class="campo"><label>Preferência de pagamento</label>
-      <select id="f-prazo">${prazos.map(p=>`<option value="${p}" ${(f.prazo_pagamento??30)==p?"selected":""}>${prazoRot(p)}</option>`).join("")}</select></div>
+    <div class="campo"><label>Preferência de pagamento (dias)</label>
+      <input id="f-prazo" type="number" inputmode="numeric" min="1" value="${f.prazo_pagamento??30}" placeholder="ex.: 1, 7, 15, 17, 30"></div>
     <div class="erro" id="f-erro"></div>
     <button class="btn btn-primario" id="f-salvar">Salvar</button>
     ${botaoExcluir(id?"f-excluir":"","Excluir fornecedor")}`);
@@ -1301,7 +1330,7 @@ function abrirModalFornecedor(id){
 async function salvarFornecedor(id){
   const nome = $("#f-nome").value.trim();
   if(!nome){ $("#f-erro").textContent = "Dê um nome ao fornecedor."; return; }
-  const dados = { nome, cidade:$("#f-cidade").value.trim()||null, estado:$("#f-estado").value.trim().toUpperCase()||null, prazo_pagamento:parseInt($("#f-prazo").value)||30 };
+  const dados = { nome, cidade:$("#f-cidade").value.trim()||null, estado:$("#f-estado").value.trim().toUpperCase()||null, prazo_pagamento:Math.max(1,parseInt($("#f-prazo").value)||30) };
   if(id){
     const f = state.fornecedores.find(x=>x.id===id);
     if(!f){ fecharModal(); toast("Registro não encontrado. Recarregue o app.", true); return; }
