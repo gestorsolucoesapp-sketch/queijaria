@@ -1,7 +1,7 @@
 {
-  "name": "Queijaria da Família",
-  "short_name": "Queijaria",
-  "description": "Produção, cura, estoque e vendas da queijaria da família.",
+  "name": "Queijaria Bene",
+  "short_name": "Bene",
+  "description": "Da nossa para sua família — gestão da Queijaria Bene.",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
