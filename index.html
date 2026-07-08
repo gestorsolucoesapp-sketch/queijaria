@@ -383,7 +383,7 @@ input,select{font-family:inherit;font-size:16px}
    ======================================================================= */
 const SUPABASE_URL      = "https://cadnmgaymgljmoadebkk.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uBKKvD_e5ef4326TvkFgcg_rRnjmTus";
-const APP_VER = "v36";
+const APP_VER = "v37";
 const SPLASH_MIN = 2400;
 const EMAIL_ADMIN = "jpferreira1356@icloud.com";
 const splashT0 = Date.now();                              // suba junto com o cache do sw.js
@@ -946,7 +946,7 @@ async function comecarDoZero(){
     $("#cfg-zerar").disabled = false; $("#cfg-zerar").textContent = "Começar do zero"; return;
   }
   $("#cfg-zerar").textContent = "Apagando…";
-  const tabelas = ["recebimentos_leite","lotes","insumos","leite_faixas","fornecedores","tipos_queijo","queijaria_config"];
+  const tabelas = ["recebimentos_leite","cheques","vendas","lotes","insumos","leite_faixas","fornecedores","tipos_queijo","queijaria_config"];
   const erros = [];
   for(const t of tabelas){
     try{ const { error } = await sb.from(t).delete().eq("familia_id", familiaId); if(error) erros.push(t); }
