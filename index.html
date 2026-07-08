@@ -213,6 +213,9 @@ input,select{font-family:inherit;font-size:16px}
 .cat-info{padding:10px 12px}
 .cat-nome{font-weight:700;font-size:.88rem;margin-bottom:4px}
 .cat-preco{font-size:.78rem;color:var(--tinta-mole);line-height:1.5}
+.cat-tag{display:inline-block;font-size:.6rem;font-weight:700;background:var(--linha);color:var(--tinta-mole);
+  padding:1px 6px;border-radius:10px;margin-right:2px;vertical-align:1px}
+.cat-tag.rev{background:var(--azul);color:#fff}
 .cat-preco b{color:var(--ouro-esc);font-family:"IBM Plex Mono",monospace}
 .prod-card{display:flex;gap:10px;align-items:center;background:var(--fundo);border:1px dashed var(--linha-forte);border-radius:12px;padding:10px 12px;margin-bottom:12px}
 .prod-card:empty{display:none}
@@ -355,7 +358,7 @@ input,select{font-family:inherit;font-size:16px}
    ======================================================================= */
 const SUPABASE_URL      = "https://cadnmgaymgljmoadebkk.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uBKKvD_e5ef4326TvkFgcg_rRnjmTus";
-const APP_VER = "v24";
+const APP_VER = "v25";
 const SPLASH_MIN = 2400;
 const splashT0 = Date.now();                              // suba junto com o cache do sw.js
 
@@ -844,9 +847,10 @@ function cardProdutoHTML(t){
   if(!t) return "";
   const fo = t.foto_url ? `<img src="${t.foto_url}" style="width:54px;height:54px;border-radius:11px;object-fit:cover;flex:none">` : "";
   const precos = [t.preco_kg?`${brl(t.preco_kg)}/kg`:"", t.preco_peca?`${brl(t.preco_peca)}/pç`:""].filter(Boolean).join(" · ");
+  const rev = [t.preco_kg_revenda?`${brl(t.preco_kg_revenda)}/kg`:"", t.preco_peca_revenda?`${brl(t.preco_peca_revenda)}/pç`:""].filter(Boolean).join(" · ");
   return `<div class="prod-card">${fo}<div>
     <div class="nome" style="font-size:.9rem">${esc(t.nome)}</div>
-    <div class="det">${Number(t.dias_cura)||0}d de cura${t.litros_por_kg?` · ${num(t.litros_por_kg,1)} L/kg`:""}${precos?`<br>${precos}`:""}</div>
+    <div class="det">${Number(t.dias_cura)||0}d de cura${t.litros_por_kg?` · ${num(t.litros_por_kg,1)} L/kg`:""}${precos?`<br>Padrão: ${precos}`:""}${rev?`<br>Revenda: ${rev}`:""}</div>
   </div></div>`;
 }
 
@@ -1542,7 +1546,9 @@ function renderCatalogo(corpo){
       const foto = t.foto_url
         ? `<img src="${t.foto_url}" loading="lazy">`
         : `<div class="cat-sem-foto">🧀</div>`;
-      const precos = [t.preco_peca?`<b>${brl(t.preco_peca)}</b> pç`:"", t.preco_kg?`<b>${brl(t.preco_kg)}</b> kg`:""].filter(Boolean).join("<br>") || "<b>—</b>";
+      const pad = [t.preco_peca?`<b>${brl(t.preco_peca)}</b> pç`:"", t.preco_kg?`<b>${brl(t.preco_kg)}</b> kg`:""].filter(Boolean).join(" · ");
+      const rev = [t.preco_peca_revenda?`<b>${brl(t.preco_peca_revenda)}</b> pç`:"", t.preco_kg_revenda?`<b>${brl(t.preco_kg_revenda)}</b> kg`:""].filter(Boolean).join(" · ");
+      const precos = [(pad?`<span class="cat-tag">Padrão</span> ${pad}`:""),(rev?`<span class="cat-tag rev">Revenda</span> ${rev}`:"")].filter(Boolean).join("<br>") || "<b>—</b>";
       return `<div class="cat-card" data-queijo="${t.id}">
         ${foto}
         <div class="cat-info">
@@ -1767,9 +1773,15 @@ function abrirModalQueijo(id){
       <input type="file" id="q-foto" accept="image/*" style="display:none">
     </div>
     <div class="campo"><label>Nome</label><input id="q-nome" value="${esc(t.nome||"")}" placeholder="Ex.: Minas Frescal"></div>
+    <div class="rotulo" style="margin:2px 0 6px">Preço padrão</div>
     <div class="linha-campos">
-      <div class="campo"><label>Preço por kg (R$)</label><input id="q-kg" type="number" inputmode="decimal" value="${t.preco_kg??""}" placeholder="0,00"></div>
-      <div class="campo"><label>Preço por peça (R$)</label><input id="q-peca" type="number" inputmode="decimal" value="${t.preco_peca??""}" placeholder="0,00"></div>
+      <div class="campo"><label>Por kg (R$)</label><input id="q-kg" type="number" inputmode="decimal" value="${t.preco_kg??""}" placeholder="0,00"></div>
+      <div class="campo"><label>Por peça (R$)</label><input id="q-peca" type="number" inputmode="decimal" value="${t.preco_peca??""}" placeholder="0,00"></div>
+    </div>
+    <div class="rotulo" style="margin:2px 0 6px">Preço de revenda</div>
+    <div class="linha-campos">
+      <div class="campo"><label>Por kg (R$)</label><input id="q-kg-rev" type="number" inputmode="decimal" value="${t.preco_kg_revenda??""}" placeholder="0,00"></div>
+      <div class="campo"><label>Por peça (R$)</label><input id="q-peca-rev" type="number" inputmode="decimal" value="${t.preco_peca_revenda??""}" placeholder="0,00"></div>
     </div>
     <div class="linha-campos">
       <div class="campo"><label>Litros por kg</label><input id="q-lpk" type="number" inputmode="decimal" value="${t.litros_por_kg??""}" placeholder="média"></div>
@@ -1807,6 +1819,8 @@ async function salvarQueijo(id){
     rendimento_esperado: parseFloat($("#q-rend").value)||null,
     unidade: $("#q-unid").value,
     codigo_barras: $("#q-cb").value.trim() || null,
+    preco_kg_revenda: parseFloat($("#q-kg-rev").value)||null,
+    preco_peca_revenda: parseFloat($("#q-peca-rev").value)||null,
     preco_venda: preco_peca || preco_kg || 0
   };
   if(fotoQueijoPend){
