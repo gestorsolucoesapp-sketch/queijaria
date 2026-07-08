@@ -313,7 +313,7 @@ input,select{font-family:inherit;font-size:16px}
    ======================================================================= */
 const SUPABASE_URL      = "https://cadnmgaymgljmoadebkk.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uBKKvD_e5ef4326TvkFgcg_rRnjmTus";
-const APP_VER = "v14";                              // suba junto com o cache do sw.js
+const APP_VER = "v15";                              // suba junto com o cache do sw.js
 
 /* ===================== estado ===================== */
 let sb = null;
@@ -945,19 +945,45 @@ function renderLeiteAPagar(corpo){
 }
 
 function abrirGrupoRecebimentos(g){
-  const linhas = [...g.itens].sort((a,b)=> String(b.data).localeCompare(String(a.data))).map(r => `
-    <div class="tipo" style="padding:10px 12px" data-editrec="${r.id}">
-      <div><div class="nome" style="font-size:.85rem">${dataBR(r.data)}</div>
-      <div class="det">${num(r.litros)} L × ${brl(r.preco_litro)}/L</div></div>
-      <div class="preco">${brl(r.valor_total)}</div>
-    </div>`).join("");
+  // somar por dia; expandir pra ver/editar as entregas
+  const porDia = {};
+  g.itens.forEach(r => {
+    if(!porDia[r.data]) porDia[r.data] = { litros:0, valor:0, itens:[] };
+    porDia[r.data].litros += Number(r.litros)||0;
+    porDia[r.data].valor  += Number(r.valor_total)||0;
+    porDia[r.data].itens.push(r);
+  });
+  const linhas = Object.keys(porDia).sort().reverse().map(d => {
+    const x = porDia[d];
+    const unico = x.itens.length === 1;
+    const filhos = x.itens.map(r => `
+      <div class="tipo sub-ent" data-editrec="${r.id}" style="display:none;padding:8px 12px;margin-left:14px">
+        <div><div class="det">${num(r.litros)} L × ${brl(r.preco_litro)}/L</div></div>
+        <div class="preco" style="font-size:.8rem">${brl(r.valor_total)}</div>
+      </div>`).join("");
+    return `<div class="tipo" style="padding:10px 12px" data-dia="${d}" ${unico?`data-editrec="${x.itens[0].id}"`:""}>
+      <div><div class="nome" style="font-size:.85rem">${dataBR(d)}</div>
+      <div class="det">${num(x.litros)} L${unico?` × ${brl(x.itens[0].preco_litro)}/L`:` · ${x.itens.length} entregas — toque pra abrir`}</div></div>
+      <div class="preco">${brl(x.valor)}</div>
+    </div>${unico?"":filhos}`;
+  }).join("");
   abrirFolha(`
     <h2>${esc(nomeForn(g.fid))}</h2>
-    <p class="dica" style="margin-top:-6px">Pagamento ${dataBR(g.venc)} · ${g.itens.length} entregas · ${num(g.litros)} L — total <b>${brl(g.valor)}</b></p>
-    <div class="rotulo">Entregas deste pagamento</div>
-    <div style="max-height:44vh;overflow-y:auto">${linhas}</div>
-    <p class="dica">Toque numa entrega pra editar.</p>`);
-  $$("[data-editrec]").forEach(el => el.onclick = () => abrirModalRecebimento(el.dataset.editrec));
+    <p class="dica" style="margin-top:-6px">Pagamento ${dataBR(g.venc)} · ${num(g.litros)} L — total <b>${brl(g.valor)}</b></p>
+    <div class="rotulo">Entregas por dia</div>
+    <div style="max-height:44vh;overflow-y:auto" id="grupo-lista">${linhas}</div>
+    <p class="dica">Toque num dia pra ver ou editar as entregas.</p>`);
+  $$("#grupo-lista [data-dia]").forEach(el => {
+    if(el.dataset.editrec){ el.onclick = () => abrirModalRecebimento(el.dataset.editrec); return; }
+    el.onclick = () => {
+      let n = el.nextElementSibling;
+      while(n && n.classList.contains("sub-ent")){
+        n.style.display = n.style.display === "none" ? "flex" : "none";
+        n = n.nextElementSibling;
+      }
+    };
+  });
+  $$("#grupo-lista .sub-ent").forEach(el => el.onclick = (e) => { e.stopPropagation(); abrirModalRecebimento(el.dataset.editrec); });
 }
 
 async function marcarPagoGrupo(ids){
@@ -975,28 +1001,48 @@ async function marcarPagoGrupo(ids){
 }
 
 function renderLeiteHistorico(corpo){
-  const pagos = state.recebimentos.filter(r => r.pago).sort((a,b)=> String(b.pago_em||b.data).localeCompare(String(a.pago_em||a.data)));
+  const pagos = state.recebimentos.filter(r => r.pago);
   const totalPago = pagos.reduce((s,r)=> s + (Number(r.valor_total)||0), 0);
+  // agrupar por fornecedor + data do pagamento
+  const grupos = {};
+  pagos.forEach(r => {
+    const k = r.fornecedor_id + "|" + (r.pago_em || r.data);
+    if(!grupos[k]) grupos[k] = { fid:r.fornecedor_id, em:(r.pago_em||r.data), itens:[], litros:0, valor:0 };
+    grupos[k].itens.push(r);
+    grupos[k].litros += Number(r.litros)||0;
+    grupos[k].valor  += Number(r.valor_total)||0;
+  });
+  const chaves = Object.keys(grupos).sort((a,b)=> grupos[b].em.localeCompare(grupos[a].em));
   let html = `
     <div class="resumo">
-      <div class="stat v"><div class="n">${pagos.length}</div><div class="l">pagamentos</div></div>
+      <div class="stat v"><div class="n">${chaves.length}</div><div class="l">pagamentos</div></div>
       <div class="stat a"><div class="n" style="font-size:1.05rem">${brl(totalPago)}</div><div class="l">total pago</div></div>
     </div>
     <div class="rotulo">Histórico de pagamentos</div>`;
-  if(!pagos.length){
+  if(!chaves.length){
     html += vazioCad("Quando você tocar em <b>Pago</b> num recebimento vencido,<br>ele aparece aqui.");
   } else {
-    html += pagos.map(r => `
-      <div class="tipo pago-item" data-rec="${r.id}">
+    html += chaves.map(k => {
+      const g = grupos[k];
+      const det = g.itens.length === 1
+        ? `entrega ${dataBR(g.itens[0].data)} · ${num(g.litros)} L × ${brl(g.itens[0].preco_litro)}/L`
+        : `${g.itens.length} entregas · ${num(g.litros)} L`;
+      return `<div class="tipo pago-item" data-hgrupo="${k}">
         <div>
-          <div class="nome"><span class="link-forn" data-fdet="${r.fornecedor_id}">${esc(nomeForn(r.fornecedor_id))}</span> <span class="pill-venc pago">pago ${dataBR(r.pago_em)}</span></div>
-          <div class="det">entrega ${dataBR(r.data)} · ${num(r.litros)} L × ${brl(r.preco_litro)}/L</div>
+          <div class="nome"><span class="link-forn" data-fdet="${g.fid}">${esc(nomeForn(g.fid))}</span> <span class="pill-venc pago">pago ${dataBR(g.em)}</span></div>
+          <div class="det">${det}</div>
         </div>
-        <div class="preco">${brl(r.valor_total)}</div>
-      </div>`).join("");
+        <div class="preco">${brl(g.valor)}</div>
+      </div>`;
+    }).join("");
   }
   corpo.innerHTML = html;
-  $$("#leite-corpo [data-rec]").forEach(el => el.onclick = () => abrirModalRecebimento(el.dataset.rec));
+  const G = grupos;
+  $$("#leite-corpo [data-hgrupo]").forEach(el => el.onclick = () => {
+    const g = G[el.dataset.hgrupo];
+    if(g.itens.length === 1) abrirModalRecebimento(g.itens[0].id);
+    else abrirGrupoRecebimentos({ fid:g.fid, venc:g.em, itens:g.itens, litros:g.litros, valor:g.valor });
+  });
   $$("#leite-corpo [data-fdet]").forEach(s => s.onclick = (e) => { e.stopPropagation(); abrirDetalheFornecedor(s.dataset.fdet); });
 }
 
