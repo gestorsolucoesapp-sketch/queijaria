@@ -393,7 +393,7 @@ input,select{font-family:inherit;font-size:16px}
    ======================================================================= */
 const SUPABASE_URL      = "https://cadnmgaymgljmoadebkk.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uBKKvD_e5ef4326TvkFgcg_rRnjmTus";
-const APP_VER = "v39";
+const APP_VER = "v40";
 const SPLASH_MIN = 2400;
 const EMAIL_ADMIN = "jpferreira1356@icloud.com";
 const splashT0 = Date.now();                              // suba junto com o cache do sw.js
@@ -1995,23 +1995,67 @@ function abrirModalFornecedor(id){
   abrirFolha(`
     <h2>${id?"Editar":"Novo"} fornecedor</h2>
     <div class="campo"><label>Nome</label><input id="f-nome" value="${esc(f.nome||"")}" placeholder="Ex.: Sítio do João"></div>
-    <div class="linha-campos">
-      <div class="campo"><label>Cidade</label><input id="f-cidade" value="${esc(f.cidade||"")}"></div>
+    <div class="campo"><label>Cidade</label>
+      <select id="f-cidade-sel">
+        <option value="São José do Rio Pardo" ${(!f.cidade||f.cidade==="São José do Rio Pardo")?"selected":""}>São José do Rio Pardo</option>
+        <option value="__outra" ${(f.cidade&&f.cidade!=="São José do Rio Pardo")?"selected":""}>Outra…</option>
+      </select>
+    </div>
+    <div class="linha-campos" id="f-outra-linha" style="display:none">
+      <div class="campo"><label>Qual cidade</label><input id="f-cidade" value="${esc(f.cidade&&f.cidade!=="São José do Rio Pardo"?f.cidade:"")}"></div>
       <div class="campo"><label>Estado</label><input id="f-estado" maxlength="2" value="${esc(f.estado||"")}" placeholder="SP" style="text-transform:uppercase"></div>
     </div>
-    <div class="campo"><label>Telefone / WhatsApp</label><input id="f-tel" type="tel" inputmode="tel" value="${esc(f.telefone||"")}" placeholder="(19) 99999-9999"></div>
+    <div class="campo">
+      <label>Telefone / WhatsApp</label>
+      <div style="display:flex;gap:8px">
+        <input id="f-tel" type="tel" inputmode="tel" value="${esc(f.telefone||"")}" placeholder="(19) 99999-9999" style="flex:1">
+        <button type="button" class="btn-scan" id="f-contato" title="Buscar nos contatos">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        </button>
+      </div>
+    </div>
     <div class="campo"><label>Preferência de pagamento (dias)</label>
       <input id="f-prazo" type="number" inputmode="numeric" min="1" value="${f.prazo_pagamento??30}" placeholder="ex.: 1, 7, 15, 17, 30"></div>
     <div class="erro" id="f-erro"></div>
     <button class="btn btn-primario" id="f-salvar">Salvar</button>
     ${botaoExcluir(id?"f-excluir":"","Excluir fornecedor")}`);
+  const sincCidade = () => {
+    const outra = $("#f-cidade-sel").value === "__outra";
+    $("#f-outra-linha").style.display = outra ? "flex" : "none";
+    if(!outra){ $("#f-estado").value = "SP"; }
+  };
+  $("#f-cidade-sel").onchange = sincCidade; sincCidade();
+  $("#f-contato").onclick = buscarContato;
   $("#f-salvar").onclick = () => salvarFornecedor(id);
   if(id) $("#f-excluir").onclick = () => excluirFornecedor(id);
+}
+
+async function buscarContato(){
+  if(!("contacts" in navigator) || !navigator.contacts.select){
+    toast("Seu navegador não deixa buscar contatos aqui. Digite o número.", true);
+    return;
+  }
+  try{
+    const sel = await navigator.contacts.select(["tel","name"], { multiple:false });
+    if(sel && sel[0]){
+      const c = sel[0];
+      if(c.tel && c.tel[0]) $("#f-tel").value = c.tel[0];
+      if(c.name && c.name[0] && !$("#f-nome").value.trim()) $("#f-nome").value = c.name[0];
+      toast("Contato importado.");
+    }
+  }catch(e){ toast("Não deu pra abrir os contatos.", true); }
 }
 async function salvarFornecedor(id){
   const nome = $("#f-nome").value.trim();
   if(!nome){ $("#f-erro").textContent = "Dê um nome ao fornecedor."; return; }
-  const dados = { nome, cidade:$("#f-cidade").value.trim()||null, estado:$("#f-estado").value.trim().toUpperCase()||null, telefone:$("#f-tel").value.trim()||null, prazo_pagamento:Math.max(1,parseInt($("#f-prazo").value)||30) };
+  let cidade, estado;
+  if($("#f-cidade-sel").value === "__outra"){
+    cidade = $("#f-cidade").value.trim() || null;
+    estado = $("#f-estado").value.trim().toUpperCase() || null;
+  } else {
+    cidade = "São José do Rio Pardo"; estado = "SP";
+  }
+  const dados = { nome, cidade, estado, telefone:$("#f-tel").value.trim()||null, prazo_pagamento:Math.max(1,parseInt($("#f-prazo").value)||30) };
   if(id){
     const f = state.fornecedores.find(x=>x.id===id);
     if(!f){ fecharModal(); toast("Registro não encontrado. Recarregue o app.", true); return; }
