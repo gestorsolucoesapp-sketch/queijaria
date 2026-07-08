@@ -361,7 +361,7 @@ input,select{font-family:inherit;font-size:16px}
    ======================================================================= */
 const SUPABASE_URL      = "https://cadnmgaymgljmoadebkk.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uBKKvD_e5ef4326TvkFgcg_rRnjmTus";
-const APP_VER = "v32";
+const APP_VER = "v33";
 const SPLASH_MIN = 2400;
 const splashT0 = Date.now();                              // suba junto com o cache do sw.js
 
@@ -1440,6 +1440,47 @@ function confirmarComSenha(msg, aoConfirmar){
 
 function bomParaDe(c){ return addDias(c.data, Number(c.prazo_dias)||0); }
 
+function graficoCheques(pend){
+  const porDia = {};
+  pend.forEach(c => { const d = bomParaDe(c); porDia[d] = (porDia[d]||0) + (Number(c.valor)||0); });
+  const dias = Object.keys(porDia).sort();
+  if(!dias.length) return "";
+  const W=320, H=124, PAD=6, GAP=6;
+  const n = dias.length;
+  const bw = Math.min(44, (W-PAD*2-GAP*(n-1))/n);
+  const totalW = n*bw + (n-1)*GAP;
+  const x0 = PAD + Math.max(0, (W-PAD*2-totalW)/2);
+  const max = Math.max(...dias.map(d=>porDia[d]), 1);
+  let out = "";
+  dias.forEach((d,i) => {
+    const v = porDia[d];
+    const h = Math.max(4, (v/max)*(H-46));
+    const x = x0 + i*(bw+GAP), y = H-26-h;
+    const venc = diffDias(d) <= 0;
+    out += `<rect data-gdia="${d}" x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${bw.toFixed(1)}" height="${h.toFixed(1)}" rx="3" fill="${venc?"var(--vermelho)":"var(--ouro)"}" style="cursor:pointer"/>`;
+    out += `<text x="${(x+bw/2).toFixed(1)}" y="${(y-5).toFixed(1)}" text-anchor="middle" font-size="8" fill="#8a7f68" font-family="'IBM Plex Mono',monospace">${Math.round(v)}</text>`;
+    out += `<text x="${(x+bw/2).toFixed(1)}" y="${H-12}" text-anchor="middle" font-size="8" fill="#8a7f68" font-family="'IBM Plex Mono',monospace">${d.slice(8,10)}/${d.slice(5,7)}</text>`;
+  });
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block">${out}</svg>`;
+}
+
+function abrirChequesDoDia(d){
+  const doDia = state.cheques.filter(c => !c.compensado && bomParaDe(c) === d);
+  if(!doDia.length) return;
+  const total = doDia.reduce((s,c)=> s+(Number(c.valor)||0),0);
+  const linhas = [...doDia].sort((a,b)=>(Number(b.valor)||0)-(Number(a.valor)||0)).map(c => `
+    <div class="tipo" style="padding:10px 12px" data-cheque-dia="${c.id}">
+      <div><div class="nome" style="font-size:.88rem">${esc(c.para||"—")}</div>
+      <div class="det">${c.numero?`nº ${esc(c.numero)} · `:""}preenchido ${dataBR(c.data)}</div></div>
+      <div class="preco">${brl(c.valor)}</div>
+    </div>`).join("");
+  abrirFolha(`
+    <h2>Cheques de ${dataBR(d)}</h2>
+    <p class="dica" style="margin-top:-6px">${doDia.length===1?"1 cheque cai":doDia.length+" cheques caem"} nesse dia — total <b>${brl(total)}</b></p>
+    <div style="max-height:52vh;overflow-y:auto">${linhas}</div>`);
+  $$("[data-cheque-dia]").forEach(el => el.onclick = () => abrirModalCheque(el.dataset.chequeDia));
+}
+
 function renderCheques(corpo){
   const pend = state.cheques.filter(c => !c.compensado);
   const comp = state.cheques.filter(c => c.compensado);
@@ -1471,6 +1512,7 @@ function renderCheques(corpo){
       <div class="stat ${pend.some(c=>diffDias(bomParaDe(c))<=0)?"r":"g"}"><div class="n" style="font-size:1.05rem">${brl(totalPend)}</div><div class="l">em cheques pendentes</div></div>
       <div class="stat v"><div class="n" style="font-size:1.05rem">${brl(totalComp)}</div><div class="l">compensados</div></div>
     </div>
+    ${pend.length ? `<div class="rotulo">Volume por dia — toque na barra pra ver quem recebe</div><div class="graf-card">${graficoCheques(pend)}</div>` : ""}
     <div class="rotulo">Cheques pendentes</div>`;
   html += pend.length
     ? [...pend].sort((a,b)=> bomParaDe(a).localeCompare(bomParaDe(b))).map(cartao).join("")
@@ -1481,6 +1523,7 @@ function renderCheques(corpo){
   }
   corpo.innerHTML = html;
   corpo.querySelectorAll("[data-cheque]").forEach(el => el.onclick = () => abrirModalCheque(el.dataset.cheque));
+  corpo.querySelectorAll("[data-gdia]").forEach(r => r.onclick = () => abrirChequesDoDia(r.dataset.gdia));
   corpo.querySelectorAll("[data-compensar]").forEach(b => b.onclick = (e) => { e.stopPropagation(); marcarCompensado(b.dataset.compensar); });
 }
 
