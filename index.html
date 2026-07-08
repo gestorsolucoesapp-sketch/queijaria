@@ -297,6 +297,7 @@ input,select{font-family:inherit;font-size:16px}
     <div id="view-producao" class="view hidden"></div>
     <div id="view-leite" class="view hidden"></div>
     <div id="view-vendas" class="view hidden"></div>
+    <div id="view-cheques" class="view hidden"></div>
     <div id="view-cadastro" class="view hidden"></div>
   </main>
 
@@ -321,6 +322,10 @@ input,select{font-family:inherit;font-size:16px}
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="21" r="1.6"/><circle cx="19" cy="21" r="1.6"/><path d="M2 3h3l2.6 12.4a2 2 0 0 0 2 1.6h8.9a2 2 0 0 0 2-1.6L22 7H6"/></svg>
       Vendas
     </a>
+    <a data-nav="cheques">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M5 10h6M5 13h4"/><path d="M14 14c1-1.6 2.6-1.6 3.6 0 .7 1 1.6.8 2.4-.4"/></svg>
+      Cheques
+    </a>
     <a data-nav="cadastro">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 7h8M8 11h8M8 15h5"/></svg>
       Cadastro
@@ -338,7 +343,7 @@ input,select{font-family:inherit;font-size:16px}
    ======================================================================= */
 const SUPABASE_URL      = "https://cadnmgaymgljmoadebkk.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uBKKvD_e5ef4326TvkFgcg_rRnjmTus";
-const APP_VER = "v21";
+const APP_VER = "v22";
 const SPLASH_MIN = 2400;
 const splashT0 = Date.now();                              // suba junto com o cache do sw.js
 
@@ -554,7 +559,7 @@ async function abrirApp(){
 $$(".nav a").forEach(a => a.onclick = () => irPara(a.dataset.nav));
 function irPara(nome){
   $$(".nav a").forEach(a => a.classList.toggle("ativo", a.dataset.nav === nome));
-  ["inicio","producao","leite","vendas","cadastro"].forEach(v => $("#view-"+v).classList.add("hidden"));
+  ["inicio","producao","leite","vendas","cheques","cadastro"].forEach(v => $("#view-"+v).classList.add("hidden"));
   const v = $("#view-"+nome); v.classList.remove("hidden");
   // reinicia a animação
   v.style.animation = "none"; void v.offsetWidth; v.style.animation = "";
@@ -562,9 +567,10 @@ function irPara(nome){
   if(nome === "producao") renderProducao();
   if(nome === "leite")    renderRecebimento();
   if(nome === "vendas")   renderVendas();
+  if(nome === "cheques")  renderCheques($("#view-cheques"));
   if(nome === "cadastro") renderCadastro();
   $("#fab").classList.toggle("hidden", nome === "cadastro");
-  $("#fab").onclick = nome === "leite" ? (() => abrirModalRecebimento()) : nome === "vendas" ? (() => abrirModalVenda()) : (nome === "cadastro" ? null : abrirModalLote);
+  $("#fab").onclick = nome === "leite" ? (() => abrirModalRecebimento()) : nome === "vendas" ? (() => abrirModalVenda()) : nome === "cheques" ? (() => abrirModalCheque()) : (nome === "cadastro" ? null : abrirModalLote);
 }
 
 /* privacidade */
@@ -1385,6 +1391,11 @@ async function excluirRecebimento(id){
 }
 
 /* ===================== render: CHEQUES ===================== */
+function refreshCheques(){
+  const vc = $("#view-cheques");
+  if(vc && !vc.classList.contains("hidden")) renderCheques(vc);
+  else renderRecebimento();
+}
 function bomParaDe(c){ return addDias(c.data, Number(c.prazo_dias)||0); }
 
 function renderCheques(corpo){
@@ -1427,8 +1438,8 @@ function renderCheques(corpo){
     html += [...comp].sort((a,b)=> String(b.compensado_em||b.data).localeCompare(String(a.compensado_em||a.data))).map(cartao).join("");
   }
   corpo.innerHTML = html;
-  $$("#leite-corpo [data-cheque]").forEach(el => el.onclick = () => abrirModalCheque(el.dataset.cheque));
-  $$("#leite-corpo [data-compensar]").forEach(b => b.onclick = (e) => { e.stopPropagation(); marcarCompensado(b.dataset.compensar); });
+  corpo.querySelectorAll("[data-cheque]").forEach(el => el.onclick = () => abrirModalCheque(el.dataset.cheque));
+  corpo.querySelectorAll("[data-compensar]").forEach(b => b.onclick = (e) => { e.stopPropagation(); marcarCompensado(b.dataset.compensar); });
 }
 
 function abrirModalCheque(id){
@@ -1468,14 +1479,14 @@ async function salvarCheque(id){
     const c = state.cheques.find(x=>x.id===id);
     if(!c){ fecharModal(); toast("Registro não encontrado. Recarregue o app.", true); return; }
     const bak = {...c}; Object.assign(c, dados);
-    fecharModal(); renderRecebimento(); toast("Cheque atualizado.");
+    fecharModal(); refreshCheques(); toast("Cheque atualizado.");
     const { error } = await sb.from("cheques").update(dados).eq("id", id);
-    if(error){ Object.assign(c, bak); renderRecebimento(); toast("Erro ao salvar: "+(error.message||"?"), true); }
+    if(error){ Object.assign(c, bak); refreshCheques(); toast("Erro ao salvar: "+(error.message||"?"), true); }
   } else {
     const novo = { id:uid(), familia_id:familiaId, compensado:false, ...dados };
-    state.cheques.unshift(novo); fecharModal(); renderRecebimento(); toast("Cheque registrado.");
+    state.cheques.unshift(novo); fecharModal(); refreshCheques(); toast("Cheque registrado.");
     const { error } = await sb.from("cheques").insert(novo);
-    if(error){ state.cheques = state.cheques.filter(x=>x.id!==novo.id); renderRecebimento(); toast("Erro ao salvar: "+(error.message||"?"), true); }
+    if(error){ state.cheques = state.cheques.filter(x=>x.id!==novo.id); refreshCheques(); toast("Erro ao salvar: "+(error.message||"?"), true); }
   }
 }
 async function marcarCompensado(id){
@@ -1483,15 +1494,15 @@ async function marcarCompensado(id){
   if(!c) return;
   const bak = { compensado:c.compensado, compensado_em:c.compensado_em };
   c.compensado = true; c.compensado_em = hoje();
-  renderRecebimento(); toast("Cheque compensado.");
+  refreshCheques(); toast("Cheque compensado.");
   const { error } = await sb.from("cheques").update({ compensado:true, compensado_em:c.compensado_em }).eq("id", id);
-  if(error){ Object.assign(c, bak); renderRecebimento(); toast("Erro: "+(error.message||"?"), true); }
+  if(error){ Object.assign(c, bak); refreshCheques(); toast("Erro: "+(error.message||"?"), true); }
 }
 async function excluirCheque(id){
   const bak = state.cheques; state.cheques = state.cheques.filter(x=>x.id!==id);
-  fecharModal(); renderRecebimento(); toast("Cheque excluído.");
+  fecharModal(); refreshCheques(); toast("Cheque excluído.");
   const { error } = await sb.from("cheques").delete().eq("id", id);
-  if(error){ state.cheques = bak; renderRecebimento(); toast("Erro ao excluir: "+(error.message||"?"), true); }
+  if(error){ state.cheques = bak; refreshCheques(); toast("Erro ao excluir: "+(error.message||"?"), true); }
 }
 
 /* ===================== render: CADASTRO ===================== */
