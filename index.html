@@ -393,7 +393,7 @@ input,select{font-family:inherit;font-size:16px}
    ======================================================================= */
 const SUPABASE_URL      = "https://cadnmgaymgljmoadebkk.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uBKKvD_e5ef4326TvkFgcg_rRnjmTus";
-const APP_VER = "v40";
+const APP_VER = "v41";
 const SPLASH_MIN = 2400;
 const EMAIL_ADMIN = "jpferreira1356@icloud.com";
 const splashT0 = Date.now();                              // suba junto com o cache do sw.js
@@ -1588,9 +1588,13 @@ function abrirModalRecebimento(id, fornPre){
     const pl = precoLitroPara(litros);
     const f = state.fornecedores.find(x=>x.id===$("#r-forn").value);
     const venc = addDias($("#r-data").value||hoje(), f?(Number(f.prazo_pagamento)||30):30);
-    $("#r-previa").innerHTML = litros>0
-      ? `Preço: <b>${brl(pl)}/L</b> — total <b>${brl(litros*pl)}</b><br>Pagamento: <b>${dataBR(venc)}</b> (${prazoRot(f?f.prazo_pagamento:30)})`
-      : "Informe os litros pra calcular o valor.";
+    if(litros > 0 && pl <= 0){
+      $("#r-previa").innerHTML = `<span style="color:var(--vermelho);font-weight:700">⚠️ Sem preço cadastrado pra ${num(litros)} L.</span><br>Ajuste as faixas ou o preço padrão em Cadastro › Leite.`;
+    } else {
+      $("#r-previa").innerHTML = litros>0
+        ? `Preço: <b>${brl(pl)}/L</b> — total <b>${brl(litros*pl)}</b><br>Pagamento: <b>${dataBR(venc)}</b> (${prazoRot(f?f.prazo_pagamento:30)})`
+        : "Informe os litros pra calcular o valor.";
+    }
   };
   $("#r-litros").oninput = previa;
   $("#r-forn").onchange = previa;
@@ -1606,6 +1610,7 @@ async function salvarRecebimento(id){
   if(!fornecedor_id){ $("#r-erro").textContent = "Escolha o fornecedor."; return; }
   if(litros <= 0){ $("#r-erro").textContent = "Informe os litros."; return; }
   const preco_litro = precoLitroPara(litros);
+  if(preco_litro <= 0){ $("#r-erro").textContent = `Sem preço pra ${num(litros)} L. Cadastre a faixa ou o preço padrão em Cadastro › Leite.`; return; }
   const dados = { fornecedor_id, data, litros, preco_litro, valor_total: Math.round(litros*preco_litro*100)/100 };
   if(id){
     const r = state.recebimentos.find(x=>x.id===id);
