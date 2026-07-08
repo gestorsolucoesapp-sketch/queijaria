@@ -358,7 +358,7 @@ input,select{font-family:inherit;font-size:16px}
    ======================================================================= */
 const SUPABASE_URL      = "https://cadnmgaymgljmoadebkk.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uBKKvD_e5ef4326TvkFgcg_rRnjmTus";
-const APP_VER = "v26";
+const APP_VER = "v27";
 const SPLASH_MIN = 2400;
 const splashT0 = Date.now();                              // suba junto com o cache do sw.js
 
@@ -1168,7 +1168,7 @@ function abrirGrupoRecebimentos(g){
     const x = porDia[d];
     const unico = x.itens.length === 1;
     const filhos = x.itens.map(r => `
-      <div class="tipo sub-ent" data-editrec="${r.id}" style="display:none;padding:8px 12px;margin-left:14px">
+      <div class="tipo sub-ent" data-editrec="${r.id}" style="display:flex;padding:8px 12px;margin-left:14px">
         <div><div class="det">${num(r.litros)} L × ${brl(r.preco_litro)}/L</div></div>
         <div class="preco" style="font-size:.8rem">${brl(r.valor_total)}</div>
       </div>`).join("");
@@ -1189,7 +1189,7 @@ function abrirGrupoRecebimentos(g){
     el.onclick = () => {
       let n = el.nextElementSibling;
       while(n && n.classList.contains("sub-ent")){
-        n.style.display = n.style.display === "none" ? "flex" : "none";
+        n.style.display = n.style.display === "flex" ? "none" : "flex";
         n = n.nextElementSibling;
       }
     };
