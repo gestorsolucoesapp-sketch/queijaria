@@ -285,7 +285,7 @@ input,select{font-family:inherit;font-size:16px}
    ======================================================================= */
 const SUPABASE_URL      = "https://cadnmgaymgljmoadebkk.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uBKKvD_e5ef4326TvkFgcg_rRnjmTus";
-const APP_VER = "v5";                              // suba junto com o cache do sw.js
+const APP_VER = "v6";                              // suba junto com o cache do sw.js
 
 /* ===================== estado ===================== */
 let sb = null;
@@ -734,7 +734,9 @@ async function salvarRecebimento(id){
   const preco_litro = precoLitroPara(litros);
   const dados = { fornecedor_id, data, litros, preco_litro, valor_total: Math.round(litros*preco_litro*100)/100 };
   if(id){
-    const r = state.recebimentos.find(x=>x.id===id); const bak = {...r}; Object.assign(r, dados);
+    const r = state.recebimentos.find(x=>x.id===id);
+    if(!r){ fecharModal(); toast("Registro não encontrado. Recarregue o app.", true); return; }
+    const bak = {...r}; Object.assign(r, dados);
     state.recebimentos.sort((a,b)=>String(b.data).localeCompare(String(a.data)));
     fecharModal(); renderRecebimento(); toast("Recebimento atualizado.");
     const { error } = await sb.from("recebimentos_leite").update(dados).eq("id", id);
@@ -896,7 +898,9 @@ async function salvarFornecedor(id){
   if(!nome){ $("#f-erro").textContent = "Dê um nome ao fornecedor."; return; }
   const dados = { nome, cidade:$("#f-cidade").value.trim()||null, estado:$("#f-estado").value.trim().toUpperCase()||null, prazo_pagamento:parseInt($("#f-prazo").value)||30 };
   if(id){
-    const f = state.fornecedores.find(x=>x.id===id); const bak = {...f}; Object.assign(f, dados);
+    const f = state.fornecedores.find(x=>x.id===id);
+    if(!f){ fecharModal(); toast("Registro não encontrado. Recarregue o app.", true); return; }
+    const bak = {...f}; Object.assign(f, dados);
     ordenarPorNome(state.fornecedores); fecharModal(); renderCadastro(); toast("Fornecedor atualizado.");
     const { error } = await sb.from("fornecedores").update(dados).eq("id", id);
     if(error){ Object.assign(f, bak); renderCadastro(); toast("Não deu pra salvar.", true); }
@@ -950,7 +954,9 @@ async function salvarFaixa(id){
   const ateRaw = $("#x-ate").value.trim();
   const dados = { litros_de:de, litros_ate: ateRaw==="" ? null : parseFloat(ateRaw), preco: parseFloat($("#x-preco").value)||0 };
   if(id){
-    const x = state.leiteFaixas.find(f=>f.id===id); const bak = {...x}; Object.assign(x, dados);
+    const x = state.leiteFaixas.find(f=>f.id===id);
+    if(!x){ fecharModal(); toast("Registro não encontrado. Recarregue o app.", true); return; }
+    const bak = {...x}; Object.assign(x, dados);
     fecharModal(); renderCadastro(); toast("Faixa atualizada.");
     const { error } = await sb.from("leite_faixas").update(dados).eq("id", id);
     if(error){ Object.assign(x, bak); renderCadastro(); toast("Não deu pra salvar.", true); }
@@ -1006,7 +1012,9 @@ async function salvarQueijo(id){
     preco_venda: preco_peca || preco_kg || 0
   };
   if(id){
-    const t = state.tipos.find(x=>x.id===id); const bak = {...t}; Object.assign(t, dados);
+    const t = state.tipos.find(x=>x.id===id);
+    if(!t){ fecharModal(); toast("Registro não encontrado. Recarregue o app.", true); return; }
+    const bak = {...t}; Object.assign(t, dados);
     ordenarPorNome(state.tipos); fecharModal(); renderCadastro(); toast("Queijo atualizado.");
     const { error } = await sb.from("tipos_queijo").update(dados).eq("id", id);
     if(error){ Object.assign(t, bak); renderCadastro(); toast("Não deu pra salvar.", true); }
@@ -1058,7 +1066,9 @@ async function salvarInsumo(id){
     fornecedor_id: $("#i-forn").value || null
   };
   if(id){
-    const i = state.insumos.find(x=>x.id===id); const bak = {...i}; Object.assign(i, dados);
+    const i = state.insumos.find(x=>x.id===id);
+    if(!i){ fecharModal(); toast("Registro não encontrado. Recarregue o app.", true); return; }
+    const bak = {...i}; Object.assign(i, dados);
     ordenarPorNome(state.insumos); fecharModal(); renderCadastro(); toast("Insumo atualizado.");
     const { error } = await sb.from("insumos").update(dados).eq("id", id);
     if(error){ Object.assign(i, bak); renderCadastro(); toast("Não deu pra salvar.", true); }
