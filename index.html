@@ -393,7 +393,7 @@ input,select{font-family:inherit;font-size:16px}
    ======================================================================= */
 const SUPABASE_URL      = "https://cadnmgaymgljmoadebkk.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uBKKvD_e5ef4326TvkFgcg_rRnjmTus";
-const APP_VER = "v41";
+const APP_VER = "v42";
 const SPLASH_MIN = 2400;
 const EMAIL_ADMIN = "jpferreira1356@icloud.com";
 const splashT0 = Date.now();                              // suba junto com o cache do sw.js
@@ -1315,16 +1315,18 @@ function renderLeiteAPagar(corpo){
   const vencidos = recs.filter(r => diffDias(vencimentoDe(r)) <= 0);
   const valorVencido = vencidos.reduce((s,r)=> s + (Number(r.valor_total)||0), 0);
 
-  // agrupar por fornecedor + vencimento
+  // agrupar por fornecedor (soma todas as entregas pendentes)
   const grupos = {};
   recs.forEach(r => {
     const venc = vencimentoDe(r);
-    const k = r.fornecedor_id + "|" + venc;
-    if(!grupos[k]) grupos[k] = { fid:r.fornecedor_id, venc, itens:[], litros:0, valor:0 };
+    const k = r.fornecedor_id;
+    if(!grupos[k]) grupos[k] = { fid:r.fornecedor_id, venc, vencMin:venc, itens:[], litros:0, valor:0 };
     grupos[k].itens.push(r);
     grupos[k].litros += Number(r.litros)||0;
     grupos[k].valor  += Number(r.valor_total)||0;
+    if(venc < grupos[k].vencMin) grupos[k].vencMin = venc; // vencimento mais próximo
   });
+  Object.values(grupos).forEach(g => { g.venc = g.vencMin; });
 
   let html = `
     <div class="resumo">
@@ -1341,11 +1343,11 @@ function renderLeiteAPagar(corpo){
       const g = grupos[k];
       const dias = diffDias(g.venc);
       const vencido = dias <= 0;
-      const quando = vencido ? (dias===0 ? "paga hoje" : `venceu ${dataBR(g.venc)}`) : `paga ${dataBR(g.venc)}`;
-      const unico = g.itens.length === 1 ? g.itens[0] : null;
-      const det = unico
-        ? `${dataBR(unico.data)} · ${num(unico.litros)} L × ${brl(unico.preco_litro)}/L`
-        : `${g.itens.length} entregas · ${num(g.litros)} L`;
+      const quando = vencido ? (dias===0 ? "vence hoje" : `venceu ${dataBR(g.venc)}`) : `próx. ${dataBR(g.venc)}`;
+      const nLanc = g.itens.length;
+      const det = nLanc === 1
+        ? `${dataBR(g.itens[0].data)} · ${num(g.itens[0].litros)} L × ${brl(g.itens[0].preco_litro)}/L`
+        : `${nLanc} lançamentos · ${num(g.litros)} L`;
       return `<div class="tipo ${vencido?"vencido":""}" data-grupo="${k}">
         <div>
           <div class="nome"><button class="mini-add" data-addforn="${g.fid}">+</button><span class="link-forn" data-fdet="${g.fid}">${esc(nomeForn(g.fid))}</span> <span class="pill-venc ${vencido?"on":""}" data-prazoforn="${g.fid}">${quando}</span></div>
@@ -1353,7 +1355,7 @@ function renderLeiteAPagar(corpo){
         </div>
         <div style="text-align:right">
           <div class="preco">${brl(g.valor)}</div>
-          ${vencido?`<button class="btn-pago" data-pagogrupo="${k}">Pago</button>`:""}
+          ${vencido?`<button class="btn-pago" data-pagogrupo="${k}">Pagar tudo</button>`:""}
         </div>
       </div>`;
     }).join("");
