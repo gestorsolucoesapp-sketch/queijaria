@@ -361,7 +361,7 @@ input,select{font-family:inherit;font-size:16px}
    ======================================================================= */
 const SUPABASE_URL      = "https://cadnmgaymgljmoadebkk.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uBKKvD_e5ef4326TvkFgcg_rRnjmTus";
-const APP_VER = "v33";
+const APP_VER = "v34";
 const SPLASH_MIN = 2400;
 const splashT0 = Date.now();                              // suba junto com o cache do sw.js
 
@@ -573,6 +573,36 @@ async function abrirApp(){
   atualizarOlho();
   await carregarTudo();
   irPara("inicio");
+  iniciarRealtime();
+}
+
+// ===== Tempo real: recarrega e re-renderiza quando algo muda no banco =====
+let realtimeCanal = null, realtimeTimer = null;
+function iniciarRealtime(){
+  if(realtimeCanal) return;
+  const tabelas = ["recebimentos_leite","vendas","cheques","tipos_queijo","fornecedores","insumos","leite_faixas","lotes","queijaria_config"];
+  realtimeCanal = sb.channel("queijaria-" + familiaId);
+  tabelas.forEach(t => realtimeCanal.on("postgres_changes",
+    { event: "*", schema: "public", table: t, filter: "familia_id=eq." + familiaId },
+    () => agendarSync()));
+  realtimeCanal.subscribe();
+  // rede volta / app volta pro foco → sincroniza
+  window.addEventListener("online", agendarSync);
+  document.addEventListener("visibilitychange", () => { if(!document.hidden) agendarSync(); });
+}
+function agendarSync(){
+  clearTimeout(realtimeTimer);
+  realtimeTimer = setTimeout(async () => {
+    if(document.querySelector(".overlay")) return; // não recarrega com um modal aberto
+    await carregarTudo();
+    const p = paginaAtual();
+    if(p === "inicio") renderInicio();
+    else if(p === "producao") renderProducao();
+    else if(p === "leite") renderRecebimento();
+    else if(p === "vendas") renderVendas();
+    else if(p === "cheques") renderCheques($("#view-cheques"));
+    else if(p === "cadastro") renderCadastro();
+  }, 700);
 }
 $$(".nav a").forEach(a => a.onclick = () => irPara(a.dataset.nav));
 function irPara(nome){
