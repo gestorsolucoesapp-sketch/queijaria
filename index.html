@@ -285,7 +285,7 @@ input,select{font-family:inherit;font-size:16px}
    ======================================================================= */
 const SUPABASE_URL      = "https://cadnmgaymgljmoadebkk.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uBKKvD_e5ef4326TvkFgcg_rRnjmTus";
-const APP_VER = "v7";                              // suba junto com o cache do sw.js
+const APP_VER = "v8";                              // suba junto com o cache do sw.js
 
 /* ===================== estado ===================== */
 let sb = null;
@@ -503,7 +503,7 @@ function irPara(nome){
   if(nome === "leite")    renderRecebimento();
   if(nome === "cadastro") renderCadastro();
   $("#fab").classList.toggle("hidden", nome === "cadastro");
-  $("#fab").onclick = nome === "leite" ? abrirModalRecebimento : (nome === "cadastro" ? null : abrirModalLote);
+  $("#fab").onclick = nome === "leite" ? (() => abrirModalRecebimento()) : (nome === "cadastro" ? null : abrirModalLote);
 }
 
 /* privacidade */
@@ -696,6 +696,7 @@ function renderRecebimento(){
 }
 
 function abrirModalRecebimento(id){
+  if(typeof id !== "string") id = undefined; // clique de botão não é id
   if(!state.fornecedores.length){
     toast("Cadastre um fornecedor primeiro.");
     irPara("cadastro"); cadAba = "fornecedores"; renderCadastro(); setTimeout(() => abrirModalFornecedor(), 250); return;
@@ -876,6 +877,7 @@ function botaoExcluir(id, label){
 
 /* ---------- Fornecedor ---------- */
 function abrirModalFornecedor(id){
+  if(typeof id !== "string") id = undefined;
   const f = state.fornecedores.find(x=>x.id===id) || {};
   const prazos = [1,7,15,30];
   abrirFolha(`
@@ -934,6 +936,7 @@ async function salvarPrecoPadrao(){
   if(error){ state.config.preco_leite_padrao = bak; renderCadastro(); toast("Não deu pra salvar.", true); }
 }
 function abrirModalFaixa(id){
+  if(typeof id !== "string") id = undefined;
   const x = state.leiteFaixas.find(f=>f.id===id) || {};
   abrirFolha(`
     <h2>${id?"Editar":"Nova"} faixa de preço</h2>
@@ -976,6 +979,7 @@ async function excluirFaixa(id){
 
 /* ---------- Queijo (tipos_queijo) ---------- */
 function abrirModalQueijo(id){
+  if(typeof id !== "string") id = undefined;
   const t = state.tipos.find(x=>x.id===id) || {};
   abrirFolha(`
     <h2>${id?"Editar":"Novo"} queijo</h2>
@@ -1035,6 +1039,7 @@ async function excluirQueijo(id){
 
 /* ---------- Insumo ---------- */
 function abrirModalInsumo(id){
+  if(typeof id !== "string") id = undefined;
   const i = state.insumos.find(x=>x.id===id) || {};
   const opts = `<option value="">— sem fornecedor —</option>` + state.fornecedores.map(f=>`<option value="${f.id}" ${i.fornecedor_id===f.id?"selected":""}>${esc(f.nome)}</option>`).join("");
   abrirFolha(`
