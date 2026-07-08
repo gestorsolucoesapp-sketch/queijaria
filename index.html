@@ -203,6 +203,8 @@ input,select{font-family:inherit;font-size:16px}
 @keyframes logoPulse{0%,100%{opacity:1}50%{opacity:.72}}
 @keyframes nomeSobe{from{opacity:0;translate:0 8px}to{opacity:1;translate:0 0}}
 @keyframes barraVai{0%{margin-left:-46%}100%{margin-left:102%}}
+.prod-card{display:flex;gap:10px;align-items:center;background:var(--fundo);border:1px dashed var(--linha-forte);border-radius:12px;padding:10px 12px;margin-bottom:12px}
+.prod-card:empty{display:none}
 .link-forn{text-decoration:underline dotted var(--ouro);text-underline-offset:3px;cursor:pointer}
 .ciclo-cab{display:flex;justify-content:space-between;align-items:center;background:var(--card);
   border:1px solid var(--linha);border-radius:12px;padding:10px 12px;margin:12px 0 6px;box-shadow:var(--sombra)}
@@ -294,6 +296,7 @@ input,select{font-family:inherit;font-size:16px}
     <div id="view-inicio" class="view"></div>
     <div id="view-producao" class="view hidden"></div>
     <div id="view-leite" class="view hidden"></div>
+    <div id="view-vendas" class="view hidden"></div>
     <div id="view-cadastro" class="view hidden"></div>
   </main>
 
@@ -314,6 +317,10 @@ input,select{font-family:inherit;font-size:16px}
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2h8l-1 3H9L8 2Z"/><path d="M7 5h10l-1.2 15.2a1 1 0 0 1-1 .8H9.2a1 1 0 0 1-1-.8L7 5Z"/><path d="M7.6 11h8.8"/></svg>
       Leite
     </a>
+    <a data-nav="vendas">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="21" r="1.6"/><circle cx="19" cy="21" r="1.6"/><path d="M2 3h3l2.6 12.4a2 2 0 0 0 2 1.6h8.9a2 2 0 0 0 2-1.6L22 7H6"/></svg>
+      Vendas
+    </a>
     <a data-nav="cadastro">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 7h8M8 11h8M8 15h5"/></svg>
       Cadastro
@@ -331,7 +338,7 @@ input,select{font-family:inherit;font-size:16px}
    ======================================================================= */
 const SUPABASE_URL      = "https://cadnmgaymgljmoadebkk.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uBKKvD_e5ef4326TvkFgcg_rRnjmTus";
-const APP_VER = "v18";                              // suba junto com o cache do sw.js
+const APP_VER = "v19";                              // suba junto com o cache do sw.js
 
 /* ===================== estado ===================== */
 let sb = null;
@@ -339,7 +346,7 @@ let sessao = null;
 let familiaId = null;
 let familiaNome = "";
 let privado = false;
-const state = { tipos: [], lotes: [], fornecedores: [], leiteFaixas: [], insumos: [], config: {}, recebimentos: [] };
+const state = { tipos: [], lotes: [], fornecedores: [], leiteFaixas: [], insumos: [], config: {}, recebimentos: [], vendas: [] };
 
 /* ===================== utilidades ===================== */
 const $  = (s, r=document) => r.querySelector(s);
@@ -516,17 +523,18 @@ $("#fam-criar").onclick = async () => {
 /* ===================== dados ===================== */
 async function carregarTudo(){
   const q = (p) => p.then(r => r.data || []).catch(() => []);
-  const [t, l, f, lf, ins, rec] = await Promise.all([
+  const [t, l, f, lf, ins, rec, vds] = await Promise.all([
     q(sb.from("tipos_queijo").select("*").eq("familia_id", familiaId).order("nome")),
     q(sb.from("lotes").select("*").eq("familia_id", familiaId).order("data_fabricacao", { ascending:false })),
     q(sb.from("fornecedores").select("*").eq("familia_id", familiaId).order("nome")),
     q(sb.from("leite_faixas").select("*").eq("familia_id", familiaId).order("litros_de")),
     q(sb.from("insumos").select("*").eq("familia_id", familiaId).order("nome")),
-    q(sb.from("recebimentos_leite").select("*").eq("familia_id", familiaId).order("data", { ascending:false }))
+    q(sb.from("recebimentos_leite").select("*").eq("familia_id", familiaId).order("data", { ascending:false })),
+    q(sb.from("vendas").select("*").eq("familia_id", familiaId).order("data", { ascending:false }))
   ]);
   let cfg = {};
   try { const r = await sb.from("queijaria_config").select("*").eq("familia_id", familiaId).maybeSingle(); cfg = r.data || {}; } catch(e){}
-  state.tipos = t; state.lotes = l; state.fornecedores = f; state.leiteFaixas = lf; state.insumos = ins; state.config = cfg; state.recebimentos = rec;
+  state.tipos = t; state.lotes = l; state.fornecedores = f; state.leiteFaixas = lf; state.insumos = ins; state.config = cfg; state.recebimentos = rec; state.vendas = vds;
 }
 
 /* ===================== app / navegação ===================== */
@@ -541,16 +549,17 @@ async function abrirApp(){
 $$(".nav a").forEach(a => a.onclick = () => irPara(a.dataset.nav));
 function irPara(nome){
   $$(".nav a").forEach(a => a.classList.toggle("ativo", a.dataset.nav === nome));
-  ["inicio","producao","leite","cadastro"].forEach(v => $("#view-"+v).classList.add("hidden"));
+  ["inicio","producao","leite","vendas","cadastro"].forEach(v => $("#view-"+v).classList.add("hidden"));
   const v = $("#view-"+nome); v.classList.remove("hidden");
   // reinicia a animação
   v.style.animation = "none"; void v.offsetWidth; v.style.animation = "";
   if(nome === "inicio")   renderInicio();
   if(nome === "producao") renderProducao();
   if(nome === "leite")    renderRecebimento();
+  if(nome === "vendas")   renderVendas();
   if(nome === "cadastro") renderCadastro();
   $("#fab").classList.toggle("hidden", nome === "cadastro");
-  $("#fab").onclick = nome === "leite" ? (() => abrirModalRecebimento()) : (nome === "cadastro" ? null : abrirModalLote);
+  $("#fab").onclick = nome === "leite" ? (() => abrirModalRecebimento()) : nome === "vendas" ? (() => abrirModalVenda()) : (nome === "cadastro" ? null : abrirModalLote);
 }
 
 /* privacidade */
@@ -781,6 +790,168 @@ function campoCodigoBarras(idInput, idBtn, valor){
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/><path d="M7 8v8M10.5 8v8M13.5 8v5M17 8v8"/></svg>
       </button>
     </div></div>`;
+}
+
+/* ===================== FOTO DO PRODUTO ===================== */
+function comprimirImagem(file, max=640){
+  return new Promise((res, rej) => {
+    const img = new Image();
+    img.onload = () => {
+      const k = Math.min(1, max / Math.max(img.width, img.height));
+      const c = document.createElement("canvas");
+      c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+      c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+      c.toBlob(b => b ? res(b) : rej(new Error("não converteu")), "image/jpeg", .82);
+    };
+    img.onerror = () => rej(new Error("imagem inválida"));
+    img.src = URL.createObjectURL(file);
+  });
+}
+async function subirFotoProduto(idProduto, file){
+  const blob = await comprimirImagem(file);
+  const path = `${familiaId}/${idProduto}.jpg`;
+  const { error } = await sb.storage.from("produtos").upload(path, blob, { upsert:true, contentType:"image/jpeg" });
+  if(error) throw error;
+  const { data } = sb.storage.from("produtos").getPublicUrl(path);
+  return data.publicUrl + "?t=" + Date.now();
+}
+
+/* ===================== FICHA RÁPIDA DO PRODUTO ===================== */
+function cardProdutoHTML(t){
+  if(!t) return "";
+  const fo = t.foto_url ? `<img src="${t.foto_url}" style="width:54px;height:54px;border-radius:11px;object-fit:cover;flex:none">` : "";
+  const precos = [t.preco_kg?`${brl(t.preco_kg)}/kg`:"", t.preco_peca?`${brl(t.preco_peca)}/pç`:""].filter(Boolean).join(" · ");
+  return `<div class="prod-card">${fo}<div>
+    <div class="nome" style="font-size:.9rem">${esc(t.nome)}</div>
+    <div class="det">${Number(t.dias_cura)||0}d de cura${t.litros_por_kg?` · ${num(t.litros_por_kg,1)} L/kg`:""}${precos?`<br>${precos}`:""}</div>
+  </div></div>`;
+}
+
+/* ===================== render: VENDAS ===================== */
+function renderVendas(){
+  const vds = state.vendas;
+  const hj = hoje();
+  const totalHoje = vds.filter(v=>v.data===hj).reduce((s,v)=>s+(Number(v.valor_total)||0),0);
+  const totalMes  = vds.filter(v=>(v.data||"").slice(0,7)===mesAtual()).reduce((s,v)=>s+(Number(v.valor_total)||0),0);
+  let html = `
+    <div class="resumo">
+      <div class="stat g"><div class="n" style="font-size:1.05rem">${brl(totalHoje)}</div><div class="l">vendas hoje</div></div>
+      <div class="stat a"><div class="n" style="font-size:1.05rem">${brl(totalMes)}</div><div class="l">vendas no mês</div></div>
+    </div>
+    <div class="rotulo">Vendas</div>`;
+  if(!vds.length){
+    html += vazioCad("Toque no <b>+</b> pra registrar uma venda:<br>bipa o código do queijo e põe só a quantidade.");
+  } else {
+    html += vds.map(v => {
+      const t = state.tipos.find(x=>x.id===v.tipo_queijo_id);
+      const fo = t && t.foto_url ? `<img src="${t.foto_url}" style="width:40px;height:40px;border-radius:9px;object-fit:cover;flex:none;margin-right:10px">` : "";
+      return `<div class="tipo" data-venda="${v.id}" style="align-items:center">
+        ${fo}<div style="flex:1">
+          <div class="nome">${esc(t?t.nome:"Produto")}</div>
+          <div class="det">${dataBR(v.data)} · ${num(v.quantidade,2)} ${esc(v.unidade||"pç")} × ${brl(v.preco_unit)}</div>
+        </div>
+        <div class="preco">${brl(v.valor_total)}</div>
+      </div>`;
+    }).join("");
+  }
+  $("#view-vendas").innerHTML = html;
+  $$("#view-vendas [data-venda]").forEach(el => el.onclick = () => abrirModalVenda(el.dataset.venda));
+}
+
+function abrirModalVenda(id){
+  if(typeof id !== "string") id = undefined;
+  if(!state.tipos.length){
+    toast("Cadastre um queijo primeiro.");
+    irPara("cadastro"); cadAba = "queijos"; renderCadastro(); setTimeout(() => abrirModalQueijo(), 250); return;
+  }
+  const v = state.vendas.find(x=>x.id===id) || {};
+  const opts = state.tipos.map(t=>`<option value="${t.id}" ${v.tipo_queijo_id===t.id?"selected":""}>${esc(t.nome)}</option>`).join("");
+  abrirFolha(`
+    <h2>${id?"Editar":"Nova"} venda</h2>
+    <div class="campo"><label>Produto</label>
+      <div style="display:flex;gap:8px">
+        <select id="v-tipo" style="flex:1">${opts}</select>
+        <button type="button" class="btn-scan" id="v-scan" title="Bipar código de barras">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/><path d="M7 8v8M10.5 8v8M13.5 8v5M17 8v8"/></svg>
+        </button>
+      </div></div>
+    <div id="v-prod-card"></div>
+    <div class="linha-campos">
+      <div class="campo"><label>Data</label><input id="v-data" type="date" value="${v.data||hoje()}"></div>
+      <div class="campo"><label>Vendido por</label>
+        <select id="v-unid"><option value="peça">peça</option><option value="kg">kg</option></select></div>
+    </div>
+    <div class="linha-campos">
+      <div class="campo"><label>Quantidade</label><input id="v-qtd" type="number" inputmode="decimal" value="${v.quantidade??""}" placeholder="0"></div>
+      <div class="campo"><label>Preço unitário (R$)</label><input id="v-preco" type="number" inputmode="decimal" value="${v.preco_unit??""}" placeholder="auto"></div>
+    </div>
+    <div class="previa" id="v-previa"></div>
+    <div class="erro" id="v-erro"></div>
+    <button class="btn btn-primario" id="v-salvar">Salvar</button>
+    ${botaoExcluir(id?"v-excluir":"","Excluir venda")}`);
+
+  const tipoSel = () => state.tipos.find(x=>x.id===$("#v-tipo").value);
+  const precoAuto = () => {
+    const t = tipoSel(); if(!t) return 0;
+    return $("#v-unid").value === "kg" ? (Number(t.preco_kg)||0) : (Number(t.preco_peca)||0);
+  };
+  const atualizarCard = (resetPreco) => {
+    const t = tipoSel();
+    $("#v-prod-card").innerHTML = cardProdutoHTML(t);
+    if(resetPreco){
+      const p = precoAuto();
+      if(p) $("#v-preco").value = p;
+    }
+    previa();
+  };
+  const previa = () => {
+    const q = parseFloat($("#v-qtd").value)||0;
+    const p = parseFloat($("#v-preco").value)||0;
+    $("#v-previa").innerHTML = q>0 && p>0 ? `Total: <b>${brl(q*p)}</b>` : "Informe quantidade e preço.";
+  };
+  // unidade inicial
+  if(v.unidade) $("#v-unid").value = v.unidade;
+  else { const t = tipoSel(); if(t && !t.preco_peca && t.preco_kg) $("#v-unid").value = "kg"; }
+  $("#v-tipo").onchange = () => atualizarCard(true);
+  $("#v-unid").onchange = () => atualizarCard(true);
+  $("#v-qtd").oninput = previa;
+  $("#v-preco").oninput = previa;
+  $("#v-scan").onclick = () => abrirScanner(c => {
+    const t = state.tipos.find(x => (x.codigo_barras||"").trim() === c);
+    if(t){ $("#v-tipo").value = t.id; atualizarCard(true); $("#v-qtd").focus(); toast("Produto: "+t.nome); }
+    else toast("Nenhum produto com esse código. Cadastre em Cadastro › Queijos.", true);
+  });
+  atualizarCard(!id && !v.preco_unit);
+  $("#v-salvar").onclick = () => salvarVenda(id);
+  if(id) $("#v-excluir").onclick = () => excluirVenda(id);
+}
+async function salvarVenda(id){
+  const tipo_queijo_id = $("#v-tipo").value;
+  const quantidade = parseFloat($("#v-qtd").value)||0;
+  const preco_unit = parseFloat($("#v-preco").value)||0;
+  if(quantidade <= 0){ $("#v-erro").textContent = "Informe a quantidade."; return; }
+  if(preco_unit <= 0){ $("#v-erro").textContent = "Informe o preço (ou cadastre no produto)."; return; }
+  const dados = { tipo_queijo_id, data: $("#v-data").value||hoje(), quantidade, unidade: $("#v-unid").value,
+                  preco_unit, valor_total: Math.round(quantidade*preco_unit*100)/100 };
+  if(id){
+    const v = state.vendas.find(x=>x.id===id);
+    if(!v){ fecharModal(); toast("Registro não encontrado. Recarregue o app.", true); return; }
+    const bak = {...v}; Object.assign(v, dados);
+    fecharModal(); renderVendas(); toast("Venda atualizada.");
+    const { error } = await sb.from("vendas").update(dados).eq("id", id);
+    if(error){ Object.assign(v, bak); renderVendas(); toast("Erro ao salvar: "+(error.message||"?"), true); }
+  } else {
+    const novo = { id:uid(), familia_id:familiaId, ...dados };
+    state.vendas.unshift(novo); fecharModal(); renderVendas(); toast("Venda registrada.");
+    const { error } = await sb.from("vendas").insert(novo);
+    if(error){ state.vendas = state.vendas.filter(x=>x.id!==novo.id); renderVendas(); toast("Erro ao salvar: "+(error.message||"?"), true); }
+  }
+}
+async function excluirVenda(id){
+  const bak = state.vendas; state.vendas = state.vendas.filter(x=>x.id!==id);
+  fecharModal(); renderVendas(); toast("Venda excluída.");
+  const { error } = await sb.from("vendas").delete().eq("id", id);
+  if(error){ state.vendas = bak; renderVendas(); toast("Erro ao excluir: "+(error.message||"?"), true); }
 }
 
 /* ===================== render: RECEBIMENTO DE LEITE ===================== */
@@ -1281,8 +1452,9 @@ function renderQueijos(corpo){
     html += state.tipos.map(t => {
       const precos = [t.preco_kg?`${brl(t.preco_kg)}/kg`:"", t.preco_peca?`${brl(t.preco_peca)}/pç`:""].filter(Boolean).join(" · ") || brl(t.preco_venda);
       const rend = t.litros_por_kg ? ` · ${num(t.litros_por_kg,1)} L/kg` : "";
-      return `<div class="tipo" data-queijo="${t.id}">
-        <div><div class="nome">${esc(t.nome)}</div><div class="det">${Number(t.dias_cura)||0} dias de cura${rend}</div></div>
+      const fo = t.foto_url ? `<img src="${t.foto_url}" style="width:42px;height:42px;border-radius:9px;object-fit:cover;flex:none;margin-right:10px">` : "";
+      return `<div class="tipo" data-queijo="${t.id}" style="align-items:center">
+        ${fo}<div style="flex:1"><div class="nome">${esc(t.nome)}</div><div class="det">${Number(t.dias_cura)||0} dias de cura${rend}</div></div>
         <div class="preco" style="font-size:.78rem;text-align:right;line-height:1.3">${precos}</div>
       </div>`;
     }).join("");
@@ -1432,6 +1604,13 @@ function abrirModalQueijo(id){
   const t = state.tipos.find(x=>x.id===id) || {};
   abrirFolha(`
     <h2>${id?"Editar":"Novo"} queijo</h2>
+    <div class="campo"><label>Foto do produto</label>
+      <div style="display:flex;gap:10px;align-items:center">
+        <img id="q-foto-prev" src="${t.foto_url||""}" style="width:56px;height:56px;border-radius:12px;object-fit:cover;background:var(--linha);flex:none;${t.foto_url?"":"visibility:hidden"}">
+        <button type="button" class="btn btn-fantasma" id="q-foto-btn" style="flex:1;margin:0">📷 Tirar ou escolher foto</button>
+      </div>
+      <input type="file" id="q-foto" accept="image/*" style="display:none">
+    </div>
     <div class="campo"><label>Nome</label><input id="q-nome" value="${esc(t.nome||"")}" placeholder="Ex.: Minas Frescal"></div>
     <div class="linha-campos">
       <div class="campo"><label>Preço por kg (R$)</label><input id="q-kg" type="number" inputmode="decimal" value="${t.preco_kg??""}" placeholder="0,00"></div>
@@ -1450,12 +1629,20 @@ function abrirModalQueijo(id){
     <button class="btn btn-primario" id="q-salvar">Salvar</button>
     ${botaoExcluir(id?"q-excluir":"","Excluir queijo")}`);
   $("#q-scan").onclick = () => abrirScanner(c => { $("#q-cb").value = c; toast("Código lido: "+c); });
+  fotoQueijoPend = null;
+  $("#q-foto-btn").onclick = () => $("#q-foto").click();
+  $("#q-foto").onchange = (e) => {
+    const f = e.target.files && e.target.files[0];
+    if(f){ fotoQueijoPend = f; const p = $("#q-foto-prev"); p.src = URL.createObjectURL(f); p.style.visibility = "visible"; }
+  };
   $("#q-salvar").onclick = () => salvarQueijo(id);
   if(id) $("#q-excluir").onclick = () => excluirQueijo(id);
 }
+let fotoQueijoPend = null;
 async function salvarQueijo(id){
   const nome = $("#q-nome").value.trim();
   if(!nome){ $("#q-erro").textContent = "Dê um nome ao queijo."; return; }
+  const idFinal = id || uid();
   const preco_peca = parseFloat($("#q-peca").value)||null;
   const preco_kg = parseFloat($("#q-kg").value)||null;
   const dados = {
@@ -1467,6 +1654,12 @@ async function salvarQueijo(id){
     codigo_barras: $("#q-cb").value.trim() || null,
     preco_venda: preco_peca || preco_kg || 0
   };
+  if(fotoQueijoPend){
+    $("#q-salvar").disabled = true; $("#q-salvar").textContent = "Subindo foto…";
+    try{ dados.foto_url = await subirFotoProduto(idFinal, fotoQueijoPend); }
+    catch(e){ $("#q-erro").textContent = "Foto não subiu: "+(e.message||"?"); $("#q-salvar").disabled = false; $("#q-salvar").textContent = "Salvar"; return; }
+    fotoQueijoPend = null;
+  }
   if(id){
     const t = state.tipos.find(x=>x.id===id);
     if(!t){ fecharModal(); toast("Registro não encontrado. Recarregue o app.", true); return; }
@@ -1475,7 +1668,7 @@ async function salvarQueijo(id){
     const { error } = await sb.from("tipos_queijo").update(dados).eq("id", id);
     if(error){ Object.assign(t, bak); renderCadastro(); toast("Não deu pra salvar.", true); }
   } else {
-    const novo = { id:uid(), familia_id:familiaId, ...dados };
+    const novo = { id:idFinal, familia_id:familiaId, ...dados };
     state.tipos.push(novo); ordenarPorNome(state.tipos); fecharModal(); renderCadastro(); toast("Queijo cadastrado.");
     const { error } = await sb.from("tipos_queijo").insert(novo);
     if(error){ state.tipos = state.tipos.filter(x=>x.id!==novo.id); renderCadastro(); toast("Não deu pra salvar.", true); }
@@ -1562,6 +1755,7 @@ function abrirModalLote(){
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/><path d="M7 8v8M10.5 8v8M13.5 8v5M17 8v8"/></svg>
         </button>
       </div></div>
+    <div id="l-prod-card"></div>
     <div class="linha-campos">
       <div class="campo"><label>Data de fabricação</label><input id="l-data" type="date" value="${hoje()}"></div>
       <div class="campo"><label>Litros de leite</label><input id="l-litros" type="number" inputmode="decimal" placeholder="0"></div>
@@ -1579,6 +1773,7 @@ function abrirModalLote(){
 
   const atualizarPrevia = () => {
     const t = state.tipos.find(x=>x.id === $("#l-tipo").value);
+    $("#l-prod-card").innerHTML = cardProdutoHTML(t);
     const data = $("#l-data").value || hoje();
     const pronto = addDias(data, t? t.dias_cura : 0);
     const rest = diffDias(pronto);
