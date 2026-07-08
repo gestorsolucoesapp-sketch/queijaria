@@ -314,7 +314,7 @@ input,select{font-family:inherit;font-size:16px}
    ======================================================================= */
 const SUPABASE_URL      = "https://cadnmgaymgljmoadebkk.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uBKKvD_e5ef4326TvkFgcg_rRnjmTus";
-const APP_VER = "v16";                              // suba junto com o cache do sw.js
+const APP_VER = "v17";                              // suba junto com o cache do sw.js
 
 /* ===================== estado ===================== */
 let sb = null;
@@ -1538,7 +1538,13 @@ function abrirModalLote(){
   abrirFolha(`
     <h2>Novo lote de produção</h2>
     <p class="dica">A data em que fica pronto é calculada pelos dias de cura do tipo.</p>
-    <div class="campo"><label>Tipo de queijo</label><select id="l-tipo">${opcoes}</select></div>
+    <div class="campo"><label>Tipo de queijo</label>
+      <div style="display:flex;gap:8px">
+        <select id="l-tipo" style="flex:1">${opcoes}</select>
+        <button type="button" class="btn-scan" id="l-scan" title="Escanear código de barras do queijo">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/><path d="M7 8v8M10.5 8v8M13.5 8v5M17 8v8"/></svg>
+        </button>
+      </div></div>
     <div class="linha-campos">
       <div class="campo"><label>Data de fabricação</label><input id="l-data" type="date" value="${hoje()}"></div>
       <div class="campo"><label>Litros de leite</label><input id="l-litros" type="number" inputmode="decimal" placeholder="0"></div>
@@ -1547,6 +1553,12 @@ function abrirModalLote(){
     <div class="previa" id="l-previa"></div>
     <div class="erro" id="l-erro"></div>
     <button class="btn btn-primario" id="l-salvar">Registrar lote</button>`);
+
+  $("#l-scan").onclick = () => abrirScanner(c => {
+    const t = state.tipos.find(x => (x.codigo_barras||"").trim() === c);
+    if(t){ $("#l-tipo").value = t.id; atualizarPrevia(); toast("Queijo: "+t.nome); }
+    else toast("Nenhum queijo com esse código. Cadastre em Cadastro › Queijos.", true);
+  });
 
   const atualizarPrevia = () => {
     const t = state.tipos.find(x=>x.id === $("#l-tipo").value);
