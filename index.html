@@ -305,7 +305,7 @@ input,select{font-family:inherit;font-size:16px}
    ======================================================================= */
 const SUPABASE_URL      = "https://cadnmgaymgljmoadebkk.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uBKKvD_e5ef4326TvkFgcg_rRnjmTus";
-const APP_VER = "v10";                              // suba junto com o cache do sw.js
+const APP_VER = "v11";                              // suba junto com o cache do sw.js
 
 /* ===================== estado ===================== */
 let sb = null;
@@ -680,16 +680,22 @@ function abrirModalConfig(){
     <h2>Configurações</h2>
     <div class="rotulo" style="margin-top:4px">Zona de perigo</div>
     <p class="dica">Apaga <b>todos os dados</b> da queijaria: fornecedores, queijos, insumos, recebimentos, lotes, faixas de preço e configurações. A conta e a família continuam. <b>Não tem volta.</b></p>
-    <div class="campo"><label>Digite <b>APAGAR</b> pra confirmar</label><input id="cfg-confirma" autocomplete="off" autocapitalize="characters" placeholder="APAGAR"></div>
+    <div class="campo"><label>Confirme com a senha da sua conta</label><input id="cfg-senha" type="password" autocomplete="current-password" placeholder="••••••••"></div>
     <div class="erro" id="cfg-erro"></div>
     <button class="btn btn-primario" id="cfg-zerar" style="background:var(--vermelho)">Começar do zero</button>`);
   $("#cfg-zerar").onclick = comecarDoZero;
 }
 async function comecarDoZero(){
-  if($("#cfg-confirma").value.trim().toUpperCase() !== "APAGAR"){
-    $("#cfg-erro").textContent = "Digite APAGAR pra confirmar."; return;
+  const senha = $("#cfg-senha").value;
+  if(!senha){ $("#cfg-erro").textContent = "Digite sua senha pra confirmar."; return; }
+  $("#cfg-zerar").disabled = true; $("#cfg-zerar").textContent = "Verificando…";
+  const email = sessao?.user?.email;
+  const { error: authErr } = await sb.auth.signInWithPassword({ email, password: senha });
+  if(authErr){
+    $("#cfg-erro").textContent = "Senha incorreta.";
+    $("#cfg-zerar").disabled = false; $("#cfg-zerar").textContent = "Começar do zero"; return;
   }
-  $("#cfg-zerar").disabled = true; $("#cfg-zerar").textContent = "Apagando…";
+  $("#cfg-zerar").textContent = "Apagando…";
   const tabelas = ["recebimentos_leite","lotes","insumos","leite_faixas","fornecedores","tipos_queijo","queijaria_config"];
   const erros = [];
   for(const t of tabelas){
