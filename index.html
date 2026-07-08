@@ -184,26 +184,26 @@ input,select{font-family:inherit;font-size:16px}
 <!-- LOGIN / CADASTRO -->
 <div id="tela-auth" class="centro hidden">
   <div class="marca">
-    <svg width="48" height="48" viewBox="0 0 48 48" fill="none"><path d="M24 8 42 20v4H6v-4L24 8Z" fill="#D99A2B"/><path d="M6 24h36v10a4 4 0 0 1-4 4H10a4 4 0 0 1-4-4V24Z" fill="#B57A15"/><circle cx="16" cy="30" r="2.5" fill="#F5F2E9"/><circle cx="27" cy="33" r="2" fill="#F5F2E9"/><circle cx="34" cy="28" r="1.6" fill="#F5F2E9"/></svg>
+    <img src="logo.png" alt="Queijaria do Bené" style="width:96px;height:96px;object-fit:contain;margin:0 auto 4px;display:block" onerror="this.style.display='none'">
     <h1 class="serif">Queijaria da Família</h1>
     <p>Produção, cura e vendas num lugar só</p>
   </div>
   <div id="aviso-config" class="aviso-config hidden">
     <b>Falta configurar.</b> Preencha <code>SUPABASE_URL</code> e <code>SUPABASE_ANON_KEY</code> no topo do <code>index.html</code> com os dados do seu projeto Supabase.
   </div>
-  <div class="painel">
+  <form class="painel" id="au-form">
     <div class="campo">
       <label>E-mail</label>
-      <input id="au-email" type="email" autocomplete="email" placeholder="voce@email.com">
+      <input id="au-email" name="username" type="email" autocomplete="username" placeholder="voce@email.com">
     </div>
     <div class="campo">
       <label>Senha</label>
-      <input id="au-senha" type="password" autocomplete="current-password" placeholder="••••••••">
+      <input id="au-senha" name="password" type="password" autocomplete="current-password" placeholder="••••••••">
     </div>
     <div class="erro" id="au-erro"></div>
-    <button class="btn btn-primario" id="au-entrar">Entrar</button>
-    <button class="btn btn-fantasma" id="au-alternar" style="margin-top:6px">Não tem conta? Criar uma</button>
-  </div>
+    <button class="btn btn-primario" id="au-entrar" type="submit">Entrar</button>
+    <button class="btn btn-fantasma" id="au-alternar" type="button" style="margin-top:6px">Não tem conta? Criar uma</button>
+  </form>
 </div>
 
 <!-- CRIAR FAMÍLIA -->
@@ -273,7 +273,7 @@ input,select{font-family:inherit;font-size:16px}
    ======================================================================= */
 const SUPABASE_URL      = "https://cadnmgaymgljmoadebkk.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uBKKvD_e5ef4326TvkFgcg_rRnjmTus";
-const APP_VER = "v1";                              // suba junto com o cache do sw.js
+const APP_VER = "v2";                              // suba junto com o cache do sw.js
 
 /* ===================== estado ===================== */
 let sb = null;
@@ -379,7 +379,8 @@ $("#au-alternar").onclick = () => {
   $("#au-alternar").textContent = modoCadastro ? "Já tenho conta. Entrar" : "Não tem conta? Criar uma";
   $("#au-erro").textContent = "";
 };
-$("#au-entrar").onclick = async () => {
+$("#au-form").addEventListener("submit", async (ev) => {
+  ev.preventDefault();
   const email = $("#au-email").value.trim();
   const senha = $("#au-senha").value;
   const err = $("#au-erro");
@@ -403,7 +404,7 @@ $("#au-entrar").onclick = async () => {
   }finally{
     $("#au-entrar").disabled = false;
   }
-};
+});
 function traduzErro(m=""){
   m = m.toLowerCase();
   if(m.includes("invalid login")) return "E-mail ou senha incorretos.";
