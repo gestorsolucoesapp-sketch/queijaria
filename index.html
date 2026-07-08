@@ -217,6 +217,7 @@ input,select{font-family:inherit;font-size:16px}
 .alerta-cheque .ac-ic{font-size:1.5rem;flex:none}
 .alerta-cheque .ac-tit{font-weight:800;color:var(--vermelho);font-size:.95rem}
 .alerta-cheque .ac-sub{font-size:.8rem;color:var(--tinta-mole);margin-top:1px}
+.btn-whats{background:#25D366;color:#fff;border:none;display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:12px}
 .cheque-card{display:flex;align-items:center;gap:12px}
 .check-baixa{width:28px;height:28px;border-radius:9px;border:2px solid var(--linha-forte);background:var(--card);flex:none;cursor:pointer;display:grid;place-items:center;padding:0}
 .check-baixa.on{background:var(--verde);border-color:var(--verde)}
@@ -392,7 +393,7 @@ input,select{font-family:inherit;font-size:16px}
    ======================================================================= */
 const SUPABASE_URL      = "https://cadnmgaymgljmoadebkk.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uBKKvD_e5ef4326TvkFgcg_rRnjmTus";
-const APP_VER = "v38";
+const APP_VER = "v39";
 const SPLASH_MIN = 2400;
 const EMAIL_ADMIN = "jpferreira1356@icloud.com";
 const splashT0 = Date.now();                              // suba junto com o cache do sw.js
@@ -1268,6 +1269,7 @@ function abrirDetalheFornecedor(fid){
   abrirFolha(`
     <h2>${esc(f.nome)}</h2>
     <p class="dica" style="margin-top:-6px">${num(totLitros)} L no total · ${brl(totValor)}</p>
+    ${soDigitos(f.telefone)?`<button class="btn btn-whats" id="det-whats">${iconeWhats()} Enviar acerto no WhatsApp</button>`:""}
     <div class="rotulo">Período de pagamento</div>
     <div class="seg-linha">${segPrazo}</div>
     <div class="rotulo">Litros por dia · cor = ciclo</div>
@@ -1275,6 +1277,7 @@ function abrirDetalheFornecedor(fid){
     <div class="rotulo">Ciclos</div>
     <div style="max-height:34vh;overflow-y:auto">${blocos}</div>`);
 
+  if(soDigitos(f.telefone)) $("#det-whats").onclick = () => mensagemFornecedor(fid, recs, "");
   $$(".seg-prazo").forEach(b => b.onclick = () => {
     const novo = parseInt(b.dataset.prazo);
     if(novo === prazo) return;
@@ -1398,12 +1401,15 @@ function abrirGrupoRecebimentos(g){
       <div class="preco">${brl(x.valor)}</div>
     </div>${filhos}`;
   }).join("");
+  const temTel = soDigitos((state.fornecedores.find(x=>x.id===g.fid)||{}).telefone);
   abrirFolha(`
     <h2>${esc(nomeForn(g.fid))}</h2>
     <p class="dica" style="margin-top:-6px">Pagamento ${dataBR(g.venc)} · ${num(g.litros)} L — total <b>${brl(g.valor)}</b></p>
+    ${temTel?`<button class="btn btn-whats" id="grupo-whats">${iconeWhats()} Enviar acerto no WhatsApp</button>`:`<p class="dica">Cadastre o telefone do fornecedor pra enviar por WhatsApp.</p>`}
     <div class="rotulo">Entregas por dia</div>
-    <div style="max-height:44vh;overflow-y:auto" id="grupo-lista">${linhas}</div>
+    <div style="max-height:40vh;overflow-y:auto" id="grupo-lista">${linhas}</div>
     <p class="dica">Lápis edita, lixeira apaga (pede senha). Toque no dia pra recolher.</p>`);
+  if(temTel) $("#grupo-whats").onclick = () => mensagemFornecedor(g.fid, g.itens, dataBR(g.venc));
   $$("#grupo-lista [data-dia]").forEach(el => {
     el.onclick = () => {
       let n = el.nextElementSibling;
@@ -1648,6 +1654,30 @@ function confirmarComSenha(msg, aoConfirmar){
   };
 }
 
+function iconeWhats(){ return `<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M17.5 14.4c-.3-.15-1.7-.84-2-.94-.26-.1-.45-.15-.64.15-.19.29-.74.94-.9 1.13-.17.19-.33.21-.62.07-.3-.15-1.25-.46-2.38-1.47-.88-.79-1.47-1.75-1.64-2.05-.17-.29-.02-.45.13-.6.13-.13.29-.34.44-.51.15-.17.19-.29.29-.48.1-.19.05-.36-.02-.51-.08-.15-.64-1.55-.88-2.12-.23-.55-.47-.48-.64-.49l-.55-.01c-.19 0-.5.07-.76.36-.26.29-1 .98-1 2.38s1.02 2.76 1.17 2.95c.15.19 2.02 3.08 4.9 4.32.68.29 1.22.47 1.63.6.69.22 1.31.19 1.8.11.55-.08 1.7-.69 1.94-1.37.24-.67.24-1.25.17-1.37-.07-.12-.26-.19-.55-.34zM12 2a10 10 0 0 0-8.6 15.06L2 22l5.06-1.33A10 10 0 1 0 12 2z"/></svg>`; }
+function soDigitos(t){ return String(t||"").replace(/\D/g,""); }
+function linkWhats(telefone, texto){
+  let n = soDigitos(telefone);
+  if(n && n.length <= 11) n = "55" + n; // Brasil
+  return "https://wa.me/" + n + "?text=" + encodeURIComponent(texto);
+}
+function mensagemFornecedor(fid, itens, vencTxt){
+  const f = state.fornecedores.find(x=>x.id===fid);
+  if(!f){ toast("Fornecedor não encontrado.", true); return; }
+  if(!soDigitos(f.telefone)){ toast("Esse fornecedor não tem telefone cadastrado.", true); return; }
+  const lista = [...itens].sort((a,b)=> String(a.data).localeCompare(String(b.data)))
+    .map(r => `${dataBR(r.data)}: ${num(r.litros)} L x ${brl(r.preco_litro)} = ${brl(r.valor_total)}`);
+  const total = itens.reduce((s,r)=> s + (Number(r.valor_total)||0), 0);
+  const litros = itens.reduce((s,r)=> s + (Number(r.litros)||0), 0);
+  const txt =
+`Olá, ${f.nome}! Segue o acerto do leite - Queijaria Bene:
+
+${lista.join("\n")}
+
+Total: ${num(litros)} L - ${brl(total)}` + (vencTxt?`\nPagamento: ${vencTxt}`:"");
+  window.open(linkWhats(f.telefone, txt), "_blank");
+}
+
 function bomParaDe(c){ return addDias(c.data, Number(c.prazo_dias)||0); }
 
 function graficoCheques(pend){
@@ -1871,7 +1901,7 @@ function renderFornecedores(corpo){
       <div class="tipo" data-forn="${f.id}">
         <div>
           <div class="nome">${esc(f.nome)}</div>
-          <div class="det">${[esc(f.cidade),esc(f.estado)].filter(Boolean).join(" · ") || "—"} · paga em ${prazoRot(f.prazo_pagamento)}</div>
+          <div class="det">${[esc(f.cidade),esc(f.estado)].filter(Boolean).join(" · ") || "—"}${f.telefone?" · 📱 "+esc(f.telefone):""} · paga em ${prazoRot(f.prazo_pagamento)}</div>
         </div>
         <div class="ver">›</div>
       </div>`).join("");
@@ -1969,6 +1999,7 @@ function abrirModalFornecedor(id){
       <div class="campo"><label>Cidade</label><input id="f-cidade" value="${esc(f.cidade||"")}"></div>
       <div class="campo"><label>Estado</label><input id="f-estado" maxlength="2" value="${esc(f.estado||"")}" placeholder="SP" style="text-transform:uppercase"></div>
     </div>
+    <div class="campo"><label>Telefone / WhatsApp</label><input id="f-tel" type="tel" inputmode="tel" value="${esc(f.telefone||"")}" placeholder="(19) 99999-9999"></div>
     <div class="campo"><label>Preferência de pagamento (dias)</label>
       <input id="f-prazo" type="number" inputmode="numeric" min="1" value="${f.prazo_pagamento??30}" placeholder="ex.: 1, 7, 15, 17, 30"></div>
     <div class="erro" id="f-erro"></div>
@@ -1980,7 +2011,7 @@ function abrirModalFornecedor(id){
 async function salvarFornecedor(id){
   const nome = $("#f-nome").value.trim();
   if(!nome){ $("#f-erro").textContent = "Dê um nome ao fornecedor."; return; }
-  const dados = { nome, cidade:$("#f-cidade").value.trim()||null, estado:$("#f-estado").value.trim().toUpperCase()||null, prazo_pagamento:Math.max(1,parseInt($("#f-prazo").value)||30) };
+  const dados = { nome, cidade:$("#f-cidade").value.trim()||null, estado:$("#f-estado").value.trim().toUpperCase()||null, telefone:$("#f-tel").value.trim()||null, prazo_pagamento:Math.max(1,parseInt($("#f-prazo").value)||30) };
   if(id){
     const f = state.fornecedores.find(x=>x.id===id);
     if(!f){ fecharModal(); toast("Registro não encontrado. Recarregue o app.", true); return; }
