@@ -1,0 +1,772 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#F5F2E9">
+<title>Queijaria da Família</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --fundo:#F5F2E9; --card:#FFFDF8; --tinta:#2B2419; --tinta-mole:#6B5E48;
+  --ouro:#D99A2B; --ouro-esc:#B57A15; --verde:#4E7C3A; --azul:#4A6FA5;
+  --vermelho:#C0392B; --linha:#E7E0CF; --linha-forte:#D8CFB8;
+  --sombra:0 1px 2px rgba(43,36,25,.06),0 8px 24px rgba(43,36,25,.05);
+  --r:16px;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0}
+body{
+  font-family:Inter,system-ui,sans-serif;color:var(--tinta);background:var(--fundo);
+  -webkit-font-smoothing:antialiased;overscroll-behavior-y:none;
+}
+.mono{font-family:'IBM Plex Mono',monospace;font-variant-numeric:tabular-nums}
+.serif{font-family:Fraunces,serif}
+button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit}
+input,select{font-family:inherit;font-size:16px}
+.hidden{display:none!important}
+
+/* ---------- Telas de entrada ---------- */
+.centro{min-height:100dvh;display:flex;flex-direction:column;justify-content:center;
+  align-items:center;padding:28px;gap:18px;text-align:center}
+.marca{display:flex;flex-direction:column;align-items:center;gap:10px}
+.marca h1{font-family:Fraunces;font-weight:600;font-size:30px;margin:0;letter-spacing:-.02em}
+.marca p{margin:0;color:var(--tinta-mole);font-size:14px}
+.painel{background:var(--card);border:1px solid var(--linha);border-radius:var(--r);
+  box-shadow:var(--sombra);padding:22px;width:100%;max-width:400px;text-align:left}
+.campo{margin-bottom:14px}
+.campo label{display:block;font-size:13px;font-weight:600;color:var(--tinta-mole);margin-bottom:6px}
+.campo input,.campo select{width:100%;padding:12px 14px;border:1px solid var(--linha-forte);
+  border-radius:12px;background:#fff;color:var(--tinta);outline:none;transition:border-color .15s}
+.campo input:focus,.campo select:focus{border-color:var(--ouro)}
+.linha-campos{display:flex;gap:10px}
+.linha-campos>.campo{flex:1}
+.btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:13px;
+  border-radius:12px;font-weight:600;font-size:15px;transition:transform .05s,filter .15s}
+.btn:active{transform:scale(.985)}
+.btn-primario{background:var(--ouro);color:#3a2a05}
+.btn-primario:hover{filter:brightness(1.03)}
+.btn-fantasma{background:transparent;color:var(--tinta-mole);font-weight:500;font-size:14px;padding:8px}
+.btn-fantasma:hover{color:var(--tinta)}
+.aviso-config{max-width:420px;background:#fff6e6;border:1px solid var(--ouro);border-radius:12px;
+  padding:14px 16px;font-size:13px;line-height:1.5;color:var(--ouro-esc);text-align:left}
+.aviso-config code{background:#00000010;padding:1px 5px;border-radius:5px;font-family:'IBM Plex Mono',monospace}
+.erro{color:var(--vermelho);font-size:13px;margin-top:4px;min-height:16px}
+
+/* ---------- App ---------- */
+#app{max-width:520px;margin:0 auto;min-height:100dvh;
+  padding-bottom:calc(78px + env(safe-area-inset-bottom))}
+.topo{position:sticky;top:0;z-index:20;background:rgba(245,242,233,.86);
+  backdrop-filter:blur(10px);border-bottom:1px solid var(--linha);
+  padding:calc(env(safe-area-inset-top) + 12px) 18px 12px;
+  display:flex;align-items:center;justify-content:space-between}
+.topo .tit{display:flex;align-items:center;gap:9px}
+.topo .tit b{font-family:Fraunces;font-weight:600;font-size:18px;letter-spacing:-.01em}
+.topo-acoes{display:flex;gap:4px}
+.icone-btn{width:38px;height:38px;border-radius:11px;display:grid;place-items:center;color:var(--tinta-mole)}
+.icone-btn:hover{background:#00000008;color:var(--tinta)}
+.conteudo{padding:18px}
+.view{animation:sobe .25s ease}
+@keyframes sobe{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+
+.rotulo{font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--tinta-mole);margin:22px 2px 10px}
+.rotulo:first-child{margin-top:4px}
+
+/* resumo */
+.resumo{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.stat{background:var(--card);border:1px solid var(--linha);border-radius:14px;padding:13px 12px}
+.stat .n{font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:23px;line-height:1;letter-spacing:-.02em}
+.stat .l{font-size:11px;color:var(--tinta-mole);margin-top:6px;line-height:1.25}
+.stat.g .n{color:var(--ouro-esc)} .stat.v .n{color:var(--verde)} .stat.a .n{color:var(--azul)}
+
+/* card herói: próximo a ficar pronto */
+.heroi{background:var(--card);border:1px solid var(--linha);border-radius:var(--r);
+  box-shadow:var(--sombra);padding:18px;display:flex;gap:18px;align-items:center;margin-top:10px}
+.heroi .roda{flex-shrink:0}
+.heroi .info .k{font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--ouro-esc)}
+.heroi .info h2{font-family:Fraunces;font-weight:600;font-size:22px;margin:4px 0 2px;letter-spacing:-.01em}
+.heroi .info .quando{font-size:14px;color:var(--tinta-mole)}
+.heroi .info .quando .mono{color:var(--tinta);font-weight:600}
+
+/* alertas */
+.alerta{display:flex;align-items:center;gap:12px;
+  background:#fdecec;border:1px solid #f3c9c4;border-radius:13px;padding:12px 14px;margin-bottom:8px}
+.alerta svg{color:var(--vermelho);flex-shrink:0}
+.alerta .txt{font-size:13.5px;line-height:1.35}
+.alerta .txt b{font-weight:600}
+
+/* lista de lotes */
+.lote{background:var(--card);border:1px solid var(--linha);border-radius:14px;padding:14px;margin-bottom:10px}
+.lote-cab{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+.lote-cab h3{font-size:16px;font-weight:600;margin:0}
+.lote-cab .sub{font-size:12.5px;color:var(--tinta-mole);margin-top:2px}
+.pill{font-size:11px;font-weight:700;padding:4px 9px;border-radius:999px;white-space:nowrap;letter-spacing:.02em}
+.pill.curando{background:#f7ead0;color:var(--ouro-esc)}
+.pill.pronto{background:#e2f0d9;color:var(--verde)}
+.pill.vendido{background:#e2e9f3;color:var(--azul)}
+.pill.descartado{background:#eee;color:#888}
+.barra{height:8px;border-radius:99px;background:#ece5d5;overflow:hidden;margin:12px 0 8px}
+.barra > i{display:block;height:100%;border-radius:99px;transition:width .5s ease}
+.lote-rod{display:flex;justify-content:space-between;align-items:center;font-size:12.5px;color:var(--tinta-mole)}
+.lote-rod .mono{color:var(--tinta);font-weight:600}
+.lote-acoes{display:flex;gap:8px;margin-top:12px}
+.mini{flex:1;padding:9px;border-radius:10px;font-size:13px;font-weight:600;border:1px solid var(--linha-forte);background:#fff;color:var(--tinta)}
+.mini:hover{border-color:var(--ouro)}
+.mini.forte{background:var(--verde);border-color:var(--verde);color:#fff}
+.mini.forte:hover{filter:brightness(1.04)}
+
+/* tipos */
+.tipo{display:flex;justify-content:space-between;align-items:center;background:var(--card);
+  border:1px solid var(--linha);border-radius:13px;padding:13px 14px;margin-bottom:9px}
+.tipo .nome{font-weight:600}
+.tipo .det{font-size:12.5px;color:var(--tinta-mole);margin-top:2px}
+.tipo .preco{font-family:'IBM Plex Mono',monospace;font-weight:600;color:var(--ouro-esc)}
+
+.vazio{text-align:center;color:var(--tinta-mole);padding:34px 20px;font-size:14px;line-height:1.5}
+.vazio svg{opacity:.4;margin-bottom:10px}
+
+/* FAB */
+.fab{position:fixed;right:calc(50% - 260px + 18px);bottom:calc(90px + env(safe-area-inset-bottom));
+  width:56px;height:56px;border-radius:18px;background:var(--ouro);color:#3a2a05;
+  display:grid;place-items:center;box-shadow:0 6px 20px rgba(217,154,43,.4);z-index:25}
+.fab:active{transform:scale(.94)}
+@media(max-width:556px){.fab{right:18px}}
+
+/* nav inferior */
+.nav{position:fixed;bottom:0;left:0;right:0;z-index:30;background:rgba(255,253,248,.92);
+  backdrop-filter:blur(12px);border-top:1px solid var(--linha);
+  display:flex;justify-content:space-around;padding:8px 0 calc(8px + env(safe-area-inset-bottom))}
+.nav a{display:flex;flex-direction:column;align-items:center;gap:3px;font-size:11px;
+  font-weight:600;color:var(--tinta-mole);padding:4px 20px;border-radius:10px}
+.nav a.ativo{color:var(--ouro-esc)}
+.nav a svg{width:23px;height:23px}
+
+/* modal */
+.overlay{position:fixed;inset:0;z-index:50;background:rgba(43,36,25,.4);backdrop-filter:blur(2px);
+  display:flex;align-items:flex-end;justify-content:center;animation:fade .2s}
+@keyframes fade{from{opacity:0}to{opacity:1}}
+.folha{background:var(--fundo);width:100%;max-width:520px;border-radius:22px 22px 0 0;
+  padding:8px 20px calc(24px + env(safe-area-inset-bottom));max-height:92dvh;overflow:auto;animation:sobeF .28s cubic-bezier(.2,.8,.2,1)}
+@keyframes sobeF{from{transform:translateY(100%)}to{transform:none}}
+.pega{width:40px;height:5px;border-radius:99px;background:var(--linha-forte);margin:8px auto 14px}
+.folha h2{font-family:Fraunces;font-weight:600;font-size:21px;margin:0 0 4px}
+.folha .dica{font-size:13px;color:var(--tinta-mole);margin:0 0 18px}
+.previa{background:#fff6e6;border:1px solid #f0dcae;border-radius:12px;padding:12px 14px;
+  font-size:13px;color:var(--ouro-esc);margin:4px 0 16px;line-height:1.5}
+.previa b{font-family:'IBM Plex Mono',monospace}
+
+/* toast */
+#toast{position:fixed;bottom:calc(94px + env(safe-area-inset-bottom));left:50%;transform:translateX(-50%);
+  z-index:80;background:var(--tinta);color:#fff;padding:11px 18px;border-radius:12px;font-size:13.5px;
+  font-weight:500;box-shadow:0 8px 24px rgba(0,0,0,.2);opacity:0;pointer-events:none;transition:opacity .2s,transform .2s}
+#toast.ver{opacity:1;transform:translateX(-50%) translateY(-4px)}
+#toast.erro-t{background:var(--vermelho)}
+
+.oculto-val{letter-spacing:1px;color:var(--tinta-mole)}
+.carregando{display:grid;place-items:center;min-height:60vh;color:var(--tinta-mole)}
+.spin{width:26px;height:26px;border:3px solid var(--linha-forte);border-top-color:var(--ouro);
+  border-radius:50%;animation:g .8s linear infinite}
+@keyframes g{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+
+<!-- CARREGANDO -->
+<div id="tela-carregando" class="centro">
+  <div class="marca"><div class="spin"></div></div>
+</div>
+
+<!-- LOGIN / CADASTRO -->
+<div id="tela-auth" class="centro hidden">
+  <div class="marca">
+    <svg width="48" height="48" viewBox="0 0 48 48" fill="none"><path d="M24 8 42 20v4H6v-4L24 8Z" fill="#D99A2B"/><path d="M6 24h36v10a4 4 0 0 1-4 4H10a4 4 0 0 1-4-4V24Z" fill="#B57A15"/><circle cx="16" cy="30" r="2.5" fill="#F5F2E9"/><circle cx="27" cy="33" r="2" fill="#F5F2E9"/><circle cx="34" cy="28" r="1.6" fill="#F5F2E9"/></svg>
+    <h1 class="serif">Queijaria da Família</h1>
+    <p>Produção, cura e vendas num lugar só</p>
+  </div>
+  <div id="aviso-config" class="aviso-config hidden">
+    <b>Falta configurar.</b> Preencha <code>SUPABASE_URL</code> e <code>SUPABASE_ANON_KEY</code> no topo do <code>index.html</code> com os dados do seu projeto Supabase.
+  </div>
+  <div class="painel">
+    <div class="campo">
+      <label>E-mail</label>
+      <input id="au-email" type="email" autocomplete="email" placeholder="voce@email.com">
+    </div>
+    <div class="campo">
+      <label>Senha</label>
+      <input id="au-senha" type="password" autocomplete="current-password" placeholder="••••••••">
+    </div>
+    <div class="erro" id="au-erro"></div>
+    <button class="btn btn-primario" id="au-entrar">Entrar</button>
+    <button class="btn btn-fantasma" id="au-alternar" style="margin-top:6px">Não tem conta? Criar uma</button>
+  </div>
+</div>
+
+<!-- CRIAR FAMÍLIA -->
+<div id="tela-familia" class="centro hidden">
+  <div class="marca">
+    <h1 class="serif">Sua queijaria</h1>
+    <p>Dê um nome. Depois é só adicionar quem produz junto.</p>
+  </div>
+  <div class="painel">
+    <div class="campo">
+      <label>Nome da queijaria / família</label>
+      <input id="fam-nome" type="text" placeholder="Ex.: Queijaria do Sítio">
+    </div>
+    <div class="erro" id="fam-erro"></div>
+    <button class="btn btn-primario" id="fam-criar">Criar</button>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="app" class="hidden">
+  <header class="topo">
+    <div class="tit">
+      <svg width="26" height="26" viewBox="0 0 48 48" fill="none"><path d="M24 8 42 20v4H6v-4L24 8Z" fill="#D99A2B"/><path d="M6 24h36v10a4 4 0 0 1-4 4H10a4 4 0 0 1-4-4V24Z" fill="#B57A15"/></svg>
+      <b id="topo-nome">Queijaria</b>
+    </div>
+    <div class="topo-acoes">
+      <button class="icone-btn" id="btn-privacidade" title="Ocultar valores"></button>
+      <button class="icone-btn" id="btn-sair" title="Sair">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <main class="conteudo">
+    <div id="view-inicio" class="view"></div>
+    <div id="view-producao" class="view hidden"></div>
+    <div id="view-tipos" class="view hidden"></div>
+  </main>
+
+  <button class="fab" id="fab" title="Novo lote">
+    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+  </button>
+
+  <nav class="nav">
+    <a data-nav="inicio" class="ativo">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V20a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V9.5"/></svg>
+      Início
+    </a>
+    <a data-nav="producao">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11 20 7v10L4 13z"/><circle cx="9" cy="12" r="1"/><circle cx="14" cy="11" r="1"/></svg>
+      Produção
+    </a>
+    <a data-nav="tipos">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 21 9v2H3V9z"/><path d="M3 11h18v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+      Tipos
+    </a>
+  </nav>
+</div>
+
+<div id="modal-host"></div>
+<div id="toast"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+/* =======================================================================
+   CONFIG  — preencha com os dados do SEU projeto Supabase
+   ======================================================================= */
+const SUPABASE_URL      = "https://cadnmgaymgljmoadebkk.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_uBKKvD_e5ef4326TvkFgcg_rRnjmTus";
+const APP_VER = "v1";                              // suba junto com o cache do sw.js
+
+/* ===================== estado ===================== */
+let sb = null;
+let sessao = null;
+let familiaId = null;
+let familiaNome = "";
+let privado = false;
+const state = { tipos: [], lotes: [] };
+
+/* ===================== utilidades ===================== */
+const $  = (s, r=document) => r.querySelector(s);
+const $$ = (s, r=document) => Array.from(r.querySelectorAll(s));
+const hoje = () => new Date().toISOString().slice(0,10);
+const uid  = () => (crypto.randomUUID ? crypto.randomUUID()
+  : "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g,c=>{const r=Math.random()*16|0;return (c==="x"?r:(r&0x3|0x8)).toString(16);}));
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+function diffDias(ate){ // dias de hoje até 'ate' (AAAA-MM-DD); pode ser negativo
+  const a = new Date(hoje()+"T00:00:00"), b = new Date(ate+"T00:00:00");
+  return Math.round((b - a) / 86400000);
+}
+function addDias(data, n){
+  const d = new Date(data+"T00:00:00"); d.setDate(d.getDate()+n);
+  return d.toISOString().slice(0,10);
+}
+function dataBR(iso){ if(!iso) return "—"; const [a,m,d]=iso.split("-"); return `${d}/${m}/${a}`; }
+
+/* formatação CENTRALIZADA (permite modo privacidade num toggle só) */
+function brl(v){
+  if(privado) return `<span class="oculto-val">R$ •••</span>`;
+  return "R$ " + (Number(v)||0).toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2});
+}
+function num(v, casas=0){
+  const n = Number(v)||0;
+  return n.toLocaleString("pt-BR",{minimumFractionDigits:casas,maximumFractionDigits:casas});
+}
+
+/* estado de cura de um lote */
+function curaDoLote(l){
+  const dc = Number(l.dias_cura)||0;
+  let pct, restam;
+  if(dc <= 0){ pct = 100; restam = 0; }
+  else {
+    const decorrido = -diffDias(l.data_fabricacao); // dias desde a fabricação (>=0 se no passado)
+    pct = Math.max(0, Math.min(100, Math.round((decorrido / dc) * 100)));
+    restam = Math.max(0, l.data_pronto ? diffDias(l.data_pronto) : dc - decorrido);
+  }
+  let status = l.status;
+  if(status === "curando" && pct >= 100) status = "pronto"; // pronto por tempo
+  const venceEm = l.validade ? diffDias(l.validade) : null;
+  const vencendo = (venceEm !== null) && venceEm <= 7 && status !== "vendido" && status !== "descartado";
+  return { pct, restam, status, venceEm, vencendo };
+}
+function corBarra(status, pct){
+  if(status === "pronto") return "var(--verde)";
+  if(status === "vendido") return "var(--azul)";
+  return "var(--ouro)"; // curando
+}
+function rotStatus(s){ return {curando:"Curando",pronto:"Pronto",vendido:"Vendido",descartado:"Descartado"}[s]||s; }
+
+/* toast */
+let toastT;
+function toast(msg, erro=false){
+  const t = $("#toast"); t.textContent = msg;
+  t.className = "ver" + (erro ? " erro-t" : "");
+  clearTimeout(toastT); toastT = setTimeout(()=> t.className = "", 2600);
+}
+
+/* ===================== boot ===================== */
+function configOk(){
+  return SUPABASE_URL && SUPABASE_URL.startsWith("http") && SUPABASE_ANON_KEY && SUPABASE_ANON_KEY.length > 20;
+}
+
+function iniciar(){
+  if(!configOk()){
+    mostrarTela("tela-auth");
+    $("#aviso-config").classList.remove("hidden");
+    $("#au-entrar").disabled = true;
+    return;
+  }
+  sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  sb.auth.getSession().then(({ data }) => {
+    if(data.session){ sessao = data.session; aposLogin(); }
+    else mostrarTela("tela-auth");
+  }).catch(()=> mostrarTela("tela-auth"));
+
+  sb.auth.onAuthStateChange((_e, s) => {
+    sessao = s;
+    if(!s){ familiaId = null; mostrarTela("tela-auth"); }
+  });
+}
+
+function mostrarTela(id){
+  ["tela-carregando","tela-auth","tela-familia","app"].forEach(t =>
+    $("#"+t).classList.toggle("hidden", t !== id));
+}
+
+/* ===================== auth ===================== */
+let modoCadastro = false;
+$("#au-alternar").onclick = () => {
+  modoCadastro = !modoCadastro;
+  $("#au-entrar").textContent = modoCadastro ? "Criar conta" : "Entrar";
+  $("#au-alternar").textContent = modoCadastro ? "Já tenho conta. Entrar" : "Não tem conta? Criar uma";
+  $("#au-erro").textContent = "";
+};
+$("#au-entrar").onclick = async () => {
+  const email = $("#au-email").value.trim();
+  const senha = $("#au-senha").value;
+  const err = $("#au-erro");
+  if(!email || !senha){ err.textContent = "Preencha e-mail e senha."; return; }
+  $("#au-entrar").disabled = true;
+  try{
+    if(modoCadastro){
+      const { error } = await sb.auth.signUp({ email, password: senha });
+      if(error) throw error;
+      const { data } = await sb.auth.getSession();
+      if(!data.session){ err.textContent = ""; toast("Conta criada. Confirme o e-mail e entre."); modoCadastro=false; $("#au-alternar").click(); $("#au-alternar").click(); return; }
+    } else {
+      const { error } = await sb.auth.signInWithPassword({ email, password: senha });
+      if(error) throw error;
+    }
+    const { data } = await sb.auth.getSession();
+    sessao = data.session;
+    if(sessao) aposLogin();
+  }catch(e){
+    err.textContent = traduzErro(e.message);
+  }finally{
+    $("#au-entrar").disabled = false;
+  }
+};
+function traduzErro(m=""){
+  m = m.toLowerCase();
+  if(m.includes("invalid login")) return "E-mail ou senha incorretos.";
+  if(m.includes("already registered")) return "Esse e-mail já tem conta. Faça login.";
+  if(m.includes("password")) return "A senha precisa de pelo menos 6 caracteres.";
+  return "Algo deu errado. Tente de novo.";
+}
+
+$("#btn-sair").onclick = async () => { await sb.auth.signOut(); location.reload(); };
+
+/* ===================== família ===================== */
+async function aposLogin(){
+  mostrarTela("tela-carregando");
+  try{
+    const { data, error } = await sb.from("familia_membros")
+      .select("familia_id, familias(nome)").limit(1);
+    if(error) throw error;
+    if(data && data.length){
+      familiaId  = data[0].familia_id;
+      familiaNome = data[0].familias ? data[0].familias.nome : "Queijaria";
+      abrirApp();
+    } else {
+      mostrarTela("tela-familia");
+    }
+  }catch(e){
+    toast("Erro ao carregar. Veja se rodou o SQL no Supabase.", true);
+    mostrarTela("tela-familia");
+  }
+}
+$("#fam-criar").onclick = async () => {
+  const nome = $("#fam-nome").value.trim();
+  const err = $("#fam-erro");
+  if(!nome){ err.textContent = "Dê um nome pra sua queijaria."; return; }
+  $("#fam-criar").disabled = true;
+  try{
+    const fid = uid();
+    let r = await sb.from("familias").insert({ id: fid, nome });
+    if(r.error) throw r.error;
+    r = await sb.from("familia_membros").insert({ familia_id: fid, user_id: sessao.user.id, papel: "dono" });
+    if(r.error) throw r.error;
+    familiaId = fid; familiaNome = nome;
+    abrirApp();
+  }catch(e){
+    err.textContent = "Não deu pra criar. Confira as políticas (RLS) no Supabase.";
+  }finally{
+    $("#fam-criar").disabled = false;
+  }
+};
+
+/* ===================== dados ===================== */
+async function carregarTudo(){
+  const [t, l] = await Promise.all([
+    sb.from("tipos_queijo").select("*").eq("familia_id", familiaId).order("nome"),
+    sb.from("lotes").select("*").eq("familia_id", familiaId).order("data_fabricacao", { ascending:false })
+  ]);
+  state.tipos = t.data || [];
+  state.lotes = l.data || [];
+}
+
+/* ===================== app / navegação ===================== */
+async function abrirApp(){
+  $("#topo-nome").textContent = familiaNome;
+  mostrarTela("app");
+  atualizarOlho();
+  await carregarTudo();
+  irPara("inicio");
+}
+$$(".nav a").forEach(a => a.onclick = () => irPara(a.dataset.nav));
+function irPara(nome){
+  $$(".nav a").forEach(a => a.classList.toggle("ativo", a.dataset.nav === nome));
+  ["inicio","producao","tipos"].forEach(v => $("#view-"+v).classList.add("hidden"));
+  const v = $("#view-"+nome); v.classList.remove("hidden");
+  // reinicia a animação
+  v.style.animation = "none"; void v.offsetWidth; v.style.animation = "";
+  if(nome === "inicio")   renderInicio();
+  if(nome === "producao") renderProducao();
+  if(nome === "tipos")    renderTipos();
+  $("#fab").classList.toggle("hidden", nome === "tipos");
+  $("#fab").onclick = nome === "tipos" ? null : abrirModalLote;
+}
+
+/* privacidade */
+$("#btn-privacidade").onclick = () => { privado = !privado; atualizarOlho(); irPara(paginaAtual()); };
+function paginaAtual(){ const a = $(".nav a.ativo"); return a ? a.dataset.nav : "inicio"; }
+function atualizarOlho(){
+  $("#btn-privacidade").innerHTML = privado
+    ? `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.5 10.5 0 0 1 12 20c-7 0-11-8-11-8a18.5 18.5 0 0 1 5.06-5.94M9.9 4.24A9.1 9.1 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19M1 1l22 22"/><path d="M9.5 9.5a3 3 0 0 0 4.2 4.2"/></svg>`
+    : `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8Z"/><circle cx="12" cy="12" r="3"/></svg>`;
+}
+
+/* ===================== render: INÍCIO ===================== */
+function anelSVG(pct, cor){
+  const R=30, C=2*Math.PI*R, off=C*(1-pct/100);
+  return `<svg width="82" height="82" viewBox="0 0 82 82" class="roda">
+    <circle cx="41" cy="41" r="${R}" fill="none" stroke="#ece5d5" stroke-width="9"/>
+    <circle cx="41" cy="41" r="${R}" fill="none" stroke="${cor}" stroke-width="9" stroke-linecap="round"
+      stroke-dasharray="${C.toFixed(1)}" stroke-dashoffset="${off.toFixed(1)}"
+      transform="rotate(-90 41 41)" style="transition:stroke-dashoffset .6s ease"/>
+    <text x="41" y="45" text-anchor="middle" font-family="'IBM Plex Mono',monospace" font-weight="600"
+      font-size="17" fill="#2B2419">${pct}%</text>
+  </svg>`;
+}
+function nomeTipo(id){ const t = state.tipos.find(x=>x.id===id); return t ? t.nome : "Sem tipo"; }
+
+function renderInicio(){
+  const ativos = state.lotes.filter(l => l.status !== "vendido" && l.status !== "descartado");
+  const comp = ativos.map(l => ({ l, c: curaDoLote(l) }));
+  const emCura  = comp.filter(x => x.c.status === "curando").reduce((s,x)=> s + (Number(x.l.pecas_produzidas)||0), 0);
+  const prontas = comp.filter(x => x.c.status === "pronto").reduce((s,x)=> s + (Number(x.l.pecas_produzidas)||0), 0);
+
+  // próximo a ficar pronto (menor % restante entre os que ainda curam)
+  const curando = comp.filter(x => x.c.status === "curando").sort((a,b)=> a.c.restam - b.c.restam);
+  const proximo = curando[0];
+
+  // vencendo
+  const vencendo = comp.filter(x => x.c.vencendo).sort((a,b)=> a.c.venceEm - b.c.venceEm);
+
+  let html = `
+    <div class="resumo">
+      <div class="stat g"><div class="n">${num(emCura)}</div><div class="l">peças em cura</div></div>
+      <div class="stat v"><div class="n">${num(prontas)}</div><div class="l">peças prontas</div></div>
+      <div class="stat a"><div class="n">${ativos.length}</div><div class="l">lotes ativos</div></div>
+    </div>`;
+
+  if(proximo){
+    const { l, c } = proximo;
+    html += `
+      <div class="rotulo">Próximo a ficar pronto</div>
+      <div class="heroi">
+        ${anelSVG(c.pct, "var(--ouro)")}
+        <div class="info">
+          <div class="k">Curando</div>
+          <h2>${esc(nomeTipo(l.tipo_queijo_id))}</h2>
+          <div class="quando">pronto em <span class="mono">${c.restam}</span> ${c.restam===1?"dia":"dias"} · ${dataBR(l.data_pronto)}</div>
+        </div>
+      </div>`;
+  }
+
+  if(vencendo.length){
+    html += `<div class="rotulo">Girar o estoque</div>`;
+    vencendo.forEach(({l,c}) => {
+      const txt = c.venceEm < 0 ? `venceu há ${Math.abs(c.venceEm)} ${Math.abs(c.venceEm)===1?"dia":"dias"}`
+                : c.venceEm === 0 ? "vence hoje" : `vence em ${c.venceEm} ${c.venceEm===1?"dia":"dias"}`;
+      html += `<div class="alerta">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        <div class="txt"><b>${esc(nomeTipo(l.tipo_queijo_id))}</b> — ${txt} · ${num(l.pecas_produzidas)} peças</div>
+      </div>`;
+    });
+  }
+
+  html += `<div class="rotulo">Lotes na queijaria</div>`;
+  if(!ativos.length){
+    html += vazioLotes();
+  } else {
+    html += comp
+      .sort((a,b)=> statusPeso(a.c.status)-statusPeso(b.c.status) || a.c.restam-b.c.restam)
+      .map(({l,c}) => cardLote(l,c)).join("");
+  }
+  $("#view-inicio").innerHTML = html;
+}
+function statusPeso(s){ return {pronto:0,curando:1,vendido:2,descartado:3}[s] ?? 9; }
+
+function cardLote(l, c){
+  const cor = corBarra(c.status, c.pct);
+  const restoTxt = c.status === "curando"
+    ? `<span class="mono">${c.restam}</span> ${c.restam===1?"dia":"dias"} p/ ficar pronto`
+    : c.status === "pronto" ? `pronto desde ${dataBR(l.data_pronto)}`
+    : `${dataBR(l.data_fabricacao)}`;
+  let acoes = "";
+  if(c.status === "pronto")  acoes = `<button class="mini forte" data-vender="${l.id}">Registrar venda</button>`;
+  if(c.status === "curando") acoes = `<button class="mini" data-pronto="${l.id}">Marcar pronto agora</button>`;
+  return `<div class="lote">
+    <div class="lote-cab">
+      <div>
+        <h3>${esc(nomeTipo(l.tipo_queijo_id))}</h3>
+        <div class="sub">Fabricado ${dataBR(l.data_fabricacao)} · ${num(l.litros_leite)} L de leite</div>
+      </div>
+      <span class="pill ${c.status}">${rotStatus(c.status)}</span>
+    </div>
+    <div class="barra"><i style="width:${c.pct}%;background:${cor}"></i></div>
+    <div class="lote-rod">
+      <span>${restoTxt}</span>
+      <span class="mono">${num(l.pecas_produzidas)} peças</span>
+    </div>
+    ${acoes ? `<div class="lote-acoes">${acoes}</div>` : ""}
+  </div>`;
+}
+function vazioLotes(){
+  return `<div class="vazio">
+    <svg width="46" height="46" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 11 20 7v10L4 13z"/></svg>
+    <div>Nenhum lote ainda.<br>Toque no <b>+</b> pra registrar sua primeira produção.</div>
+  </div>`;
+}
+
+/* ações nos lotes (delegação) */
+document.addEventListener("click", (e) => {
+  const p = e.target.closest("[data-pronto]");
+  const v = e.target.closest("[data-vender]");
+  if(p) marcarPronto(p.dataset.pronto);
+  if(v) registrarVenda(v.dataset.vender);
+});
+
+async function marcarPronto(id){
+  const l = state.lotes.find(x=>x.id===id); if(!l) return;
+  l.status = "pronto"; l.data_pronto = l.data_pronto || hoje(); // otimista
+  irPara(paginaAtual());
+  const { error } = await sb.from("lotes").update({ status:"pronto" }).eq("id", id);
+  if(error){ l.status = "curando"; irPara(paginaAtual()); toast("Não deu pra atualizar.", true); }
+  else toast("Lote marcado como pronto.");
+}
+async function registrarVenda(id){
+  // v1: baixa simples do lote como vendido. (Fluxo completo de vendas vem depois.)
+  const l = state.lotes.find(x=>x.id===id); if(!l) return;
+  const anterior = l.status;
+  l.status = "vendido"; irPara(paginaAtual()); // otimista
+  const { error } = await sb.from("lotes").update({ status:"vendido" }).eq("id", id);
+  if(error){ l.status = anterior; irPara(paginaAtual()); toast("Não deu pra registrar.", true); }
+  else toast("Lote marcado como vendido.");
+}
+
+/* ===================== render: PRODUÇÃO ===================== */
+function renderProducao(){
+  let html = `<div class="rotulo">Todos os lotes</div>`;
+  if(!state.lotes.length){ $("#view-producao").innerHTML = html + vazioLotes(); return; }
+  html += state.lotes.map(l => cardLote(l, curaDoLote(l))).join("");
+  $("#view-producao").innerHTML = html;
+}
+
+/* ===================== render: TIPOS ===================== */
+function renderTipos(){
+  let html = `<div class="rotulo">Tipos de queijo</div>`;
+  if(!state.tipos.length){
+    html += `<div class="vazio">
+      <svg width="46" height="46" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 3 21 9v2H3V9z"/><path d="M3 11h18v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+      <div>Cadastre um tipo (ex.: Minas, Coalho)<br>com os dias de cura e o preço.</div>
+    </div>`;
+  } else {
+    html += state.tipos.map(t => `
+      <div class="tipo">
+        <div>
+          <div class="nome">${esc(t.nome)}</div>
+          <div class="det">${t.dias_cura} dias de cura${t.rendimento_esperado?` · ${num(t.rendimento_esperado,2)} ${esc(t.unidade)}/L`:""}</div>
+        </div>
+        <div class="preco">${brl(t.preco_venda)}</div>
+      </div>`).join("");
+  }
+  html += `<button class="btn btn-primario" id="btn-novo-tipo" style="margin-top:14px">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+    Novo tipo de queijo</button>`;
+  $("#view-tipos").innerHTML = html;
+  $("#btn-novo-tipo").onclick = abrirModalTipo;
+}
+
+/* ===================== modais ===================== */
+function fecharModal(){ $("#modal-host").innerHTML = ""; }
+function abrirFolha(inner){
+  $("#modal-host").innerHTML =
+    `<div class="overlay" id="ov"><div class="folha"><div class="pega"></div>${inner}</div></div>`;
+  $("#ov").addEventListener("click", e => { if(e.target.id === "ov") fecharModal(); });
+}
+
+function abrirModalTipo(){
+  abrirFolha(`
+    <h2>Novo tipo de queijo</h2>
+    <p class="dica">Isso define os dias de cura e o preço padrão dos lotes desse queijo.</p>
+    <div class="campo"><label>Nome</label><input id="t-nome" placeholder="Ex.: Queijo Minas"></div>
+    <div class="linha-campos">
+      <div class="campo"><label>Dias de cura</label><input id="t-cura" type="number" inputmode="numeric" value="0"></div>
+      <div class="campo"><label>Preço de venda (R$)</label><input id="t-preco" type="number" inputmode="decimal" placeholder="0,00"></div>
+    </div>
+    <div class="linha-campos">
+      <div class="campo"><label>Rendimento por litro</label><input id="t-rend" type="number" inputmode="decimal" placeholder="opcional"></div>
+      <div class="campo"><label>Unidade</label>
+        <select id="t-unid"><option value="peças">peças</option><option value="kg">kg</option></select></div>
+    </div>
+    <div class="erro" id="t-erro"></div>
+    <button class="btn btn-primario" id="t-salvar">Salvar tipo</button>`);
+  $("#t-salvar").onclick = salvarTipo;
+}
+async function salvarTipo(){
+  const nome = $("#t-nome").value.trim();
+  if(!nome){ $("#t-erro").textContent = "Dê um nome ao tipo."; return; }
+  const novo = {
+    id: uid(), familia_id: familiaId, nome,
+    dias_cura: parseInt($("#t-cura").value)||0,
+    preco_venda: parseFloat($("#t-preco").value)||0,
+    rendimento_esperado: parseFloat($("#t-rend").value)||null,
+    unidade: $("#t-unid").value
+  };
+  state.tipos.push(novo); state.tipos.sort((a,b)=>a.nome.localeCompare(b.nome)); // otimista
+  fecharModal(); renderTipos(); toast("Tipo cadastrado.");
+  const { error } = await sb.from("tipos_queijo").insert(novo);
+  if(error){ state.tipos = state.tipos.filter(t=>t.id!==novo.id); renderTipos(); toast("Não deu pra salvar o tipo.", true); }
+}
+
+function abrirModalLote(){
+  if(!state.tipos.length){
+    toast("Cadastre um tipo de queijo primeiro.");
+    irPara("tipos"); setTimeout(abrirModalTipo, 250); return;
+  }
+  const opcoes = state.tipos.map(t=>`<option value="${t.id}">${esc(t.nome)} (${t.dias_cura}d)</option>`).join("");
+  abrirFolha(`
+    <h2>Novo lote de produção</h2>
+    <p class="dica">A data em que fica pronto é calculada pelos dias de cura do tipo.</p>
+    <div class="campo"><label>Tipo de queijo</label><select id="l-tipo">${opcoes}</select></div>
+    <div class="linha-campos">
+      <div class="campo"><label>Data de fabricação</label><input id="l-data" type="date" value="${hoje()}"></div>
+      <div class="campo"><label>Litros de leite</label><input id="l-litros" type="number" inputmode="decimal" placeholder="0"></div>
+    </div>
+    <div class="campo"><label>Peças produzidas</label><input id="l-pecas" type="number" inputmode="decimal" placeholder="0"></div>
+    <div class="previa" id="l-previa"></div>
+    <div class="erro" id="l-erro"></div>
+    <button class="btn btn-primario" id="l-salvar">Registrar lote</button>`);
+
+  const atualizarPrevia = () => {
+    const t = state.tipos.find(x=>x.id === $("#l-tipo").value);
+    const data = $("#l-data").value || hoje();
+    const pronto = addDias(data, t? t.dias_cura : 0);
+    const rest = diffDias(pronto);
+    const litros = parseFloat($("#l-litros").value)||0;
+    if(t && t.rendimento_esperado && litros && !$("#l-pecas").value){
+      $("#l-pecas").value = Math.round(litros * t.rendimento_esperado * 100)/100;
+    }
+    $("#l-previa").innerHTML = t
+      ? `Fica pronto em <b>${dataBR(pronto)}</b> — ${rest<=0?"pronto na hora":`daqui a <b>${rest}</b> ${rest===1?"dia":"dias"}`}.`
+      : "";
+  };
+  $("#l-tipo").onchange = atualizarPrevia;
+  $("#l-data").onchange = atualizarPrevia;
+  $("#l-litros").oninput = atualizarPrevia;
+  atualizarPrevia();
+  $("#l-salvar").onclick = salvarLote;
+}
+async function salvarLote(){
+  const t = state.tipos.find(x=>x.id === $("#l-tipo").value);
+  const data = $("#l-data").value || hoje();
+  const pecas = parseFloat($("#l-pecas").value)||0;
+  if(!t){ $("#l-erro").textContent = "Escolha um tipo."; return; }
+  if(pecas <= 0){ $("#l-erro").textContent = "Informe quantas peças saíram."; return; }
+  const dc = t.dias_cura||0;
+  const novo = {
+    id: uid(), familia_id: familiaId, tipo_queijo_id: t.id,
+    data_fabricacao: data,
+    litros_leite: parseFloat($("#l-litros").value)||null,
+    pecas_produzidas: pecas,
+    dias_cura: dc,
+    data_pronto: addDias(data, dc),
+    validade: null,
+    status: "curando"
+  };
+  state.lotes.unshift(novo); // otimista
+  fecharModal(); irPara("inicio"); toast("Lote registrado.");
+  const { error } = await sb.from("lotes").insert(novo);
+  if(error){ state.lotes = state.lotes.filter(l=>l.id!==novo.id); irPara("inicio"); toast("Não deu pra salvar o lote.", true); }
+}
+
+/* ===================== service worker ===================== */
+if("serviceWorker" in navigator){
+  window.addEventListener("load", () => { navigator.serviceWorker.register("sw.js").catch(()=>{}); });
+}
+
+/* start */
+iniciar();
+</script>
+</body>
+</html>
