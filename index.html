@@ -191,9 +191,9 @@ input,select{font-family:inherit;font-size:16px}
 .graf-cab{margin-bottom:8px}
 .mini-add{display:inline-grid;place-items:center;width:22px;height:22px;border-radius:7px;background:var(--ouro);color:#fff;border:none;font-size:1rem;font-weight:800;margin-right:7px;vertical-align:-3px;cursor:pointer;font-family:inherit;line-height:1}
 .splash{display:grid;place-items:center;gap:14px;animation:splashIn .5s ease-out both}
-.splash-logo{width:118px;height:118px;object-fit:contain;border-radius:26px;
+.splash-logo{width:168px;height:168px;object-fit:contain;border-radius:34px;
   animation:logoPulse 2.2s ease-in-out .5s infinite}
-.splash-nome{font-size:1.25rem;font-weight:700;color:var(--tinta);opacity:0;
+.splash-nome{font-size:1.55rem;font-weight:700;color:var(--tinta);opacity:0;
   animation:nomeSobe .55s ease-out .25s forwards}
 .splash-barra{width:120px;height:4px;border-radius:4px;background:var(--linha);overflow:hidden;opacity:0;
   animation:nomeSobe .5s ease-out .45s forwards}
@@ -338,7 +338,9 @@ input,select{font-family:inherit;font-size:16px}
    ======================================================================= */
 const SUPABASE_URL      = "https://cadnmgaymgljmoadebkk.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uBKKvD_e5ef4326TvkFgcg_rRnjmTus";
-const APP_VER = "v19";                              // suba junto com o cache do sw.js
+const APP_VER = "v20";
+const SPLASH_MIN = 2400;
+const splashT0 = Date.now();                              // suba junto com o cache do sw.js
 
 /* ===================== estado ===================== */
 let sb = null;
@@ -346,7 +348,7 @@ let sessao = null;
 let familiaId = null;
 let familiaNome = "";
 let privado = false;
-const state = { tipos: [], lotes: [], fornecedores: [], leiteFaixas: [], insumos: [], config: {}, recebimentos: [], vendas: [] };
+const state = { tipos: [], lotes: [], fornecedores: [], leiteFaixas: [], insumos: [], config: {}, recebimentos: [], vendas: [], cheques: [] };
 
 /* ===================== utilidades ===================== */
 const $  = (s, r=document) => r.querySelector(s);
@@ -523,22 +525,25 @@ $("#fam-criar").onclick = async () => {
 /* ===================== dados ===================== */
 async function carregarTudo(){
   const q = (p) => p.then(r => r.data || []).catch(() => []);
-  const [t, l, f, lf, ins, rec, vds] = await Promise.all([
+  const [t, l, f, lf, ins, rec, vds, chq] = await Promise.all([
     q(sb.from("tipos_queijo").select("*").eq("familia_id", familiaId).order("nome")),
     q(sb.from("lotes").select("*").eq("familia_id", familiaId).order("data_fabricacao", { ascending:false })),
     q(sb.from("fornecedores").select("*").eq("familia_id", familiaId).order("nome")),
     q(sb.from("leite_faixas").select("*").eq("familia_id", familiaId).order("litros_de")),
     q(sb.from("insumos").select("*").eq("familia_id", familiaId).order("nome")),
     q(sb.from("recebimentos_leite").select("*").eq("familia_id", familiaId).order("data", { ascending:false })),
-    q(sb.from("vendas").select("*").eq("familia_id", familiaId).order("data", { ascending:false }))
+    q(sb.from("vendas").select("*").eq("familia_id", familiaId).order("data", { ascending:false })),
+    q(sb.from("cheques").select("*").eq("familia_id", familiaId).order("data", { ascending:false }))
   ]);
   let cfg = {};
   try { const r = await sb.from("queijaria_config").select("*").eq("familia_id", familiaId).maybeSingle(); cfg = r.data || {}; } catch(e){}
-  state.tipos = t; state.lotes = l; state.fornecedores = f; state.leiteFaixas = lf; state.insumos = ins; state.config = cfg; state.recebimentos = rec; state.vendas = vds;
+  state.tipos = t; state.lotes = l; state.fornecedores = f; state.leiteFaixas = lf; state.insumos = ins; state.config = cfg; state.recebimentos = rec; state.vendas = vds; state.cheques = chq;
 }
 
 /* ===================== app / navegação ===================== */
 async function abrirApp(){
+  const espera = SPLASH_MIN - (Date.now() - splashT0);
+  if(espera > 0) await new Promise(r => setTimeout(r, espera));
   $("#topo-nome").textContent = familiaNome;
   $("#topo-ver").textContent = APP_VER;
   mostrarTela("app");
@@ -1055,14 +1060,16 @@ function abrirDetalheFornecedor(fid){
 }
 
 function renderRecebimento(){
-  const LEITE_ABAS = [["apagar","A pagar"],["historico","Histórico"],["graficos","Gráficos"]];
+  const LEITE_ABAS = [["apagar","A pagar"],["historico","Histórico"],["graficos","Gráficos"],["cheques","Cheques"]];
   const subnav = LEITE_ABAS.map(([k,r]) => `<a data-lab="${k}" class="${k===leiteAba?"ativo":""}">${r}</a>`).join("");
   $("#view-leite").innerHTML = `<div class="subnav">${subnav}</div><div id="leite-corpo"></div>`;
   $$("#view-leite .subnav a").forEach(a => a.onclick = () => { leiteAba = a.dataset.lab; renderRecebimento(); });
   const corpo = $("#leite-corpo");
   if(leiteAba === "apagar")    renderLeiteAPagar(corpo);
   else if(leiteAba === "historico") renderLeiteHistorico(corpo);
+  else if(leiteAba === "cheques") renderCheques(corpo);
   else renderLeiteGraficos(corpo);
+  $("#fab").onclick = leiteAba === "cheques" ? (() => abrirModalCheque()) : (() => abrirModalRecebimento());
 }
 
 function vencimentoDe(r){
@@ -1375,6 +1382,116 @@ async function excluirRecebimento(id){
   fecharModal(); renderRecebimento(); toast("Recebimento excluído.");
   const { error } = await sb.from("recebimentos_leite").delete().eq("id", id);
   if(error){ state.recebimentos = bak; renderRecebimento(); toast("Erro ao excluir: "+(error.message||error.code||"?"), true); }
+}
+
+/* ===================== render: CHEQUES ===================== */
+function bomParaDe(c){ return addDias(c.data, Number(c.prazo_dias)||0); }
+
+function renderCheques(corpo){
+  const pend = state.cheques.filter(c => !c.compensado);
+  const comp = state.cheques.filter(c => c.compensado);
+  const totalPend = pend.reduce((s,c)=> s+(Number(c.valor)||0),0);
+  const totalComp = comp.reduce((s,c)=> s+(Number(c.valor)||0),0);
+
+  const cartao = (c) => {
+    const bom = bomParaDe(c);
+    const dias = diffDias(bom);
+    const vencido = !c.compensado && dias <= 0;
+    const pill = c.compensado
+      ? `<span class="pill-venc pago">compensado ${dataBR(c.compensado_em)}</span>`
+      : `<span class="pill-venc ${vencido?"on":""}">bom p/ ${dataBR(bom)}</span>`;
+    const numero = c.numero ? ` · nº ${esc(c.numero)}` : "";
+    return `<div class="tipo ${vencido?"vencido":""}" data-cheque="${c.id}">
+      <div>
+        <div class="nome">${esc(c.para||"—")} ${pill}</div>
+        <div class="det">preenchido ${dataBR(c.data)}${numero} · prazo ${prazoRot(c.prazo_dias)}</div>
+      </div>
+      <div style="text-align:right">
+        <div class="preco">${brl(c.valor)}</div>
+        ${vencido?`<button class="btn-pago" data-compensar="${c.id}">Compensado</button>`:""}
+      </div>
+    </div>`;
+  };
+
+  let html = `
+    <div class="resumo">
+      <div class="stat ${pend.some(c=>diffDias(bomParaDe(c))<=0)?"r":"g"}"><div class="n" style="font-size:1.05rem">${brl(totalPend)}</div><div class="l">em cheques pendentes</div></div>
+      <div class="stat v"><div class="n" style="font-size:1.05rem">${brl(totalComp)}</div><div class="l">compensados</div></div>
+    </div>
+    <div class="rotulo">Cheques pendentes</div>`;
+  html += pend.length
+    ? [...pend].sort((a,b)=> bomParaDe(a).localeCompare(bomParaDe(b))).map(cartao).join("")
+    : vazioCad("Toque no <b>+</b> pra registrar um cheque:<br>pra quem, valor, data e prazo.");
+  if(comp.length){
+    html += `<div class="rotulo" style="margin-top:16px">Compensados</div>`;
+    html += [...comp].sort((a,b)=> String(b.compensado_em||b.data).localeCompare(String(a.compensado_em||a.data))).map(cartao).join("");
+  }
+  corpo.innerHTML = html;
+  $$("#leite-corpo [data-cheque]").forEach(el => el.onclick = () => abrirModalCheque(el.dataset.cheque));
+  $$("#leite-corpo [data-compensar]").forEach(b => b.onclick = (e) => { e.stopPropagation(); marcarCompensado(b.dataset.compensar); });
+}
+
+function abrirModalCheque(id){
+  if(typeof id !== "string") id = undefined;
+  const c = state.cheques.find(x=>x.id===id) || {};
+  abrirFolha(`
+    <h2>${id?"Editar":"Novo"} cheque</h2>
+    <div class="campo"><label>Para</label><input id="c-para" value="${esc(c.para||"")}" placeholder="Pra quem é o cheque"></div>
+    <div class="linha-campos">
+      <div class="campo"><label>Valor (R$)</label><input id="c-valor" type="number" inputmode="decimal" value="${c.valor??""}" placeholder="0,00"></div>
+      <div class="campo"><label>Nº do cheque (opcional)</label><input id="c-num" inputmode="numeric" value="${esc(c.numero||"")}" placeholder="—"></div>
+    </div>
+    <div class="linha-campos">
+      <div class="campo"><label>Data de preenchimento</label><input id="c-data" type="date" value="${c.data||hoje()}"></div>
+      <div class="campo"><label>Prazo (dias)</label><input id="c-prazo" type="number" inputmode="numeric" min="0" value="${c.prazo_dias??30}"></div>
+    </div>
+    <div class="previa" id="c-previa"></div>
+    <div class="erro" id="c-erro"></div>
+    <button class="btn btn-primario" id="c-salvar">Salvar</button>
+    ${botaoExcluir(id?"c-excluir":"","Excluir cheque")}`);
+  const previa = () => {
+    const bom = addDias($("#c-data").value||hoje(), parseInt($("#c-prazo").value)||0);
+    $("#c-previa").innerHTML = `Bom para: <b>${dataBR(bom)}</b>`;
+  };
+  $("#c-data").onchange = previa; $("#c-prazo").oninput = previa; previa();
+  $("#c-salvar").onclick = () => salvarCheque(id);
+  if(id) $("#c-excluir").onclick = () => excluirCheque(id);
+}
+async function salvarCheque(id){
+  const para = $("#c-para").value.trim();
+  const valor = parseFloat($("#c-valor").value)||0;
+  if(!para){ $("#c-erro").textContent = "Diga pra quem é o cheque."; return; }
+  if(valor <= 0){ $("#c-erro").textContent = "Informe o valor."; return; }
+  const dados = { para, valor, numero: $("#c-num").value.trim()||null,
+    data: $("#c-data").value||hoje(), prazo_dias: Math.max(0, parseInt($("#c-prazo").value)||0) };
+  if(id){
+    const c = state.cheques.find(x=>x.id===id);
+    if(!c){ fecharModal(); toast("Registro não encontrado. Recarregue o app.", true); return; }
+    const bak = {...c}; Object.assign(c, dados);
+    fecharModal(); renderRecebimento(); toast("Cheque atualizado.");
+    const { error } = await sb.from("cheques").update(dados).eq("id", id);
+    if(error){ Object.assign(c, bak); renderRecebimento(); toast("Erro ao salvar: "+(error.message||"?"), true); }
+  } else {
+    const novo = { id:uid(), familia_id:familiaId, compensado:false, ...dados };
+    state.cheques.unshift(novo); fecharModal(); renderRecebimento(); toast("Cheque registrado.");
+    const { error } = await sb.from("cheques").insert(novo);
+    if(error){ state.cheques = state.cheques.filter(x=>x.id!==novo.id); renderRecebimento(); toast("Erro ao salvar: "+(error.message||"?"), true); }
+  }
+}
+async function marcarCompensado(id){
+  const c = state.cheques.find(x=>x.id===id);
+  if(!c) return;
+  const bak = { compensado:c.compensado, compensado_em:c.compensado_em };
+  c.compensado = true; c.compensado_em = hoje();
+  renderRecebimento(); toast("Cheque compensado.");
+  const { error } = await sb.from("cheques").update({ compensado:true, compensado_em:c.compensado_em }).eq("id", id);
+  if(error){ Object.assign(c, bak); renderRecebimento(); toast("Erro: "+(error.message||"?"), true); }
+}
+async function excluirCheque(id){
+  const bak = state.cheques; state.cheques = state.cheques.filter(x=>x.id!==id);
+  fecharModal(); renderRecebimento(); toast("Cheque excluído.");
+  const { error } = await sb.from("cheques").delete().eq("id", id);
+  if(error){ state.cheques = bak; renderRecebimento(); toast("Erro ao excluir: "+(error.message||"?"), true); }
 }
 
 /* ===================== render: CADASTRO ===================== */
