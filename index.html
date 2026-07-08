@@ -140,11 +140,11 @@ input,select{font-family:inherit;font-size:16px}
 /* nav inferior */
 .nav{position:fixed;bottom:0;left:0;right:0;z-index:30;background:rgba(255,253,248,.92);
   backdrop-filter:blur(12px);border-top:1px solid var(--linha);
-  display:flex;justify-content:space-around;padding:8px 0 calc(8px + env(safe-area-inset-bottom))}
-.nav a{display:flex;flex-direction:column;align-items:center;gap:3px;font-size:11px;
-  font-weight:600;color:var(--tinta-mole);padding:4px 20px;border-radius:10px}
+  display:flex;padding:8px 6px calc(8px + env(safe-area-inset-bottom))}
+.nav a{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;font-size:10px;
+  font-weight:600;color:var(--tinta-mole);padding:4px 2px;border-radius:10px;white-space:nowrap;min-width:0}
 .nav a.ativo{color:var(--ouro-esc)}
-.nav a svg{width:23px;height:23px}
+.nav a svg{width:22px;height:22px;flex:none}
 
 /* modal */
 .overlay{position:fixed;inset:0;z-index:50;background:rgba(43,36,25,.4);backdrop-filter:blur(2px);
@@ -343,7 +343,7 @@ input,select{font-family:inherit;font-size:16px}
    ======================================================================= */
 const SUPABASE_URL      = "https://cadnmgaymgljmoadebkk.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uBKKvD_e5ef4326TvkFgcg_rRnjmTus";
-const APP_VER = "v22";
+const APP_VER = "v23";
 const SPLASH_MIN = 2400;
 const splashT0 = Date.now();                              // suba junto com o cache do sw.js
 
@@ -876,7 +876,8 @@ function abrirModalVenda(id){
     irPara("cadastro"); cadAba = "queijos"; renderCadastro(); setTimeout(() => abrirModalQueijo(), 250); return;
   }
   const v = state.vendas.find(x=>x.id===id) || {};
-  const opts = state.tipos.map(t=>`<option value="${t.id}" ${v.tipo_queijo_id===t.id?"selected":""}>${esc(t.nome)}</option>`).join("");
+  const opts = `<option value="" ${v.tipo_queijo_id?"":"selected"} disabled>Escolha o produto…</option>` +
+    state.tipos.map(t=>`<option value="${t.id}" ${v.tipo_queijo_id===t.id?"selected":""}>${esc(t.nome)}</option>`).join("");
   abrirFolha(`
     <h2>${id?"Editar":"Nova"} venda</h2>
     <div class="campo"><label>Produto</label>
@@ -894,7 +895,7 @@ function abrirModalVenda(id){
     </div>
     <div class="linha-campos">
       <div class="campo"><label>Quantidade</label><input id="v-qtd" type="number" inputmode="decimal" value="${v.quantidade??""}" placeholder="0"></div>
-      <div class="campo"><label>Preço unitário (R$)</label><input id="v-preco" type="number" inputmode="decimal" value="${v.preco_unit??""}" placeholder="auto"></div>
+      <div class="campo"><label>Preço unitário (R$)</label><input id="v-preco" type="number" inputmode="decimal" value="${v.preco_unit??""}" placeholder="0,00"></div>
     </div>
     <div class="previa" id="v-previa"></div>
     <div class="erro" id="v-erro"></div>
@@ -902,17 +903,8 @@ function abrirModalVenda(id){
     ${botaoExcluir(id?"v-excluir":"","Excluir venda")}`);
 
   const tipoSel = () => state.tipos.find(x=>x.id===$("#v-tipo").value);
-  const precoAuto = () => {
-    const t = tipoSel(); if(!t) return 0;
-    return $("#v-unid").value === "kg" ? (Number(t.preco_kg)||0) : (Number(t.preco_peca)||0);
-  };
-  const atualizarCard = (resetPreco) => {
-    const t = tipoSel();
-    $("#v-prod-card").innerHTML = cardProdutoHTML(t);
-    if(resetPreco){
-      const p = precoAuto();
-      if(p) $("#v-preco").value = p;
-    }
+  const atualizarCard = () => {
+    $("#v-prod-card").innerHTML = cardProdutoHTML(tipoSel());
     previa();
   };
   const previa = () => {
@@ -920,19 +912,17 @@ function abrirModalVenda(id){
     const p = parseFloat($("#v-preco").value)||0;
     $("#v-previa").innerHTML = q>0 && p>0 ? `Total: <b>${brl(q*p)}</b>` : "Informe quantidade e preço.";
   };
-  // unidade inicial
   if(v.unidade) $("#v-unid").value = v.unidade;
-  else { const t = tipoSel(); if(t && !t.preco_peca && t.preco_kg) $("#v-unid").value = "kg"; }
-  $("#v-tipo").onchange = () => atualizarCard(true);
-  $("#v-unid").onchange = () => atualizarCard(true);
+  $("#v-tipo").onchange = atualizarCard;
+  $("#v-unid").onchange = atualizarCard;
   $("#v-qtd").oninput = previa;
   $("#v-preco").oninput = previa;
   $("#v-scan").onclick = () => abrirScanner(c => {
     const t = state.tipos.find(x => (x.codigo_barras||"").trim() === c);
-    if(t){ $("#v-tipo").value = t.id; atualizarCard(true); $("#v-qtd").focus(); toast("Produto: "+t.nome); }
+    if(t){ $("#v-tipo").value = t.id; atualizarCard(); $("#v-qtd").focus(); toast("Produto: "+t.nome); }
     else toast("Nenhum produto com esse código. Cadastre em Cadastro › Queijos.", true);
   });
-  atualizarCard(!id && !v.preco_unit);
+  atualizarCard();
   $("#v-salvar").onclick = () => salvarVenda(id);
   if(id) $("#v-excluir").onclick = () => excluirVenda(id);
 }
@@ -940,6 +930,7 @@ async function salvarVenda(id){
   const tipo_queijo_id = $("#v-tipo").value;
   const quantidade = parseFloat($("#v-qtd").value)||0;
   const preco_unit = parseFloat($("#v-preco").value)||0;
+  if(!tipo_queijo_id){ $("#v-erro").textContent = "Escolha o produto."; return; }
   if(quantidade <= 0){ $("#v-erro").textContent = "Informe a quantidade."; return; }
   if(preco_unit <= 0){ $("#v-erro").textContent = "Informe o preço (ou cadastre no produto)."; return; }
   const dados = { tipo_queijo_id, data: $("#v-data").value||hoje(), quantidade, unidade: $("#v-unid").value,
@@ -1906,9 +1897,6 @@ function abrirModalLote(){
     const pronto = addDias(data, t? t.dias_cura : 0);
     const rest = diffDias(pronto);
     const litros = parseFloat($("#l-litros").value)||0;
-    if(t && t.rendimento_esperado && litros && !$("#l-pecas").value){
-      $("#l-pecas").value = Math.round(litros * t.rendimento_esperado * 100)/100;
-    }
     $("#l-previa").innerHTML = t
       ? `Fica pronto em <b>${dataBR(pronto)}</b> — ${rest<=0?"pronto na hora":`daqui a <b>${rest}</b> ${rest===1?"dia":"dias"}`}.`
       : "";
