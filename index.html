@@ -189,6 +189,12 @@ input,select{font-family:inherit;font-size:16px}
 .graf-card{background:var(--card);border:1px solid var(--linha);border-radius:var(--r);
   padding:14px 14px 8px;margin-bottom:12px;box-shadow:var(--sombra)}
 .graf-cab{margin-bottom:8px}
+.btn-scan{background:var(--ouro);color:#fff;border:none;border-radius:11px;width:48px;display:grid;place-items:center;cursor:pointer;flex:none}
+.scan-overlay{position:fixed;inset:0;background:rgba(20,16,10,.82);z-index:200;display:grid;place-items:center;padding:18px}
+.scan-box{background:var(--card);border-radius:var(--r);padding:16px;width:100%;max-width:360px;text-align:center}
+.scan-tit{font-weight:700;margin-bottom:10px}
+#scan-reader{border-radius:12px;overflow:hidden}
+#scan-reader video{border-radius:12px}
 </style>
 </head>
 <body>
@@ -248,6 +254,9 @@ input,select{font-family:inherit;font-size:16px}
       <span id="topo-ver" class="verbadge"></span>
     </div>
     <div class="topo-acoes">
+      <button class="icone-btn" id="btn-config" title="Configurações">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.09a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.09a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      </button>
       <button class="icone-btn" id="btn-privacidade" title="Ocultar valores"></button>
       <button class="icone-btn" id="btn-sair" title="Sair">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
@@ -296,7 +305,7 @@ input,select{font-family:inherit;font-size:16px}
    ======================================================================= */
 const SUPABASE_URL      = "https://cadnmgaymgljmoadebkk.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uBKKvD_e5ef4326TvkFgcg_rRnjmTus";
-const APP_VER = "v9";                              // suba junto com o cache do sw.js
+const APP_VER = "v10";                              // suba junto com o cache do sw.js
 
 /* ===================== estado ===================== */
 let sb = null;
@@ -437,6 +446,7 @@ function traduzErro(m=""){
 }
 
 $("#btn-sair").onclick = async () => { await sb.auth.signOut(); location.reload(); };
+$("#btn-config").onclick = () => abrirModalConfig();
 
 /* ===================== família ===================== */
 async function aposLogin(){
@@ -662,6 +672,83 @@ function renderProducao(){
   if(!state.lotes.length){ $("#view-producao").innerHTML = html + vazioLotes(); return; }
   html += state.lotes.map(l => cardLote(l, curaDoLote(l))).join("");
   $("#view-producao").innerHTML = html;
+}
+
+/* ===================== CONFIGURAÇÕES ===================== */
+function abrirModalConfig(){
+  abrirFolha(`
+    <h2>Configurações</h2>
+    <div class="rotulo" style="margin-top:4px">Zona de perigo</div>
+    <p class="dica">Apaga <b>todos os dados</b> da queijaria: fornecedores, queijos, insumos, recebimentos, lotes, faixas de preço e configurações. A conta e a família continuam. <b>Não tem volta.</b></p>
+    <div class="campo"><label>Digite <b>APAGAR</b> pra confirmar</label><input id="cfg-confirma" autocomplete="off" autocapitalize="characters" placeholder="APAGAR"></div>
+    <div class="erro" id="cfg-erro"></div>
+    <button class="btn btn-primario" id="cfg-zerar" style="background:var(--vermelho)">Começar do zero</button>`);
+  $("#cfg-zerar").onclick = comecarDoZero;
+}
+async function comecarDoZero(){
+  if($("#cfg-confirma").value.trim().toUpperCase() !== "APAGAR"){
+    $("#cfg-erro").textContent = "Digite APAGAR pra confirmar."; return;
+  }
+  $("#cfg-zerar").disabled = true; $("#cfg-zerar").textContent = "Apagando…";
+  const tabelas = ["recebimentos_leite","lotes","insumos","leite_faixas","fornecedores","tipos_queijo","queijaria_config"];
+  const erros = [];
+  for(const t of tabelas){
+    try{ const { error } = await sb.from(t).delete().eq("familia_id", familiaId); if(error) erros.push(t); }
+    catch(e){ erros.push(t); }
+  }
+  if(erros.length){ $("#cfg-erro").textContent = "Não deu pra apagar: "+erros.join(", "); $("#cfg-zerar").disabled = false; $("#cfg-zerar").textContent = "Começar do zero"; return; }
+  await carregarTudo();
+  fecharModal(); irPara("inicio"); toast("Tudo zerado. Recomeço limpo.");
+}
+
+/* ===================== SCANNER DE CÓDIGO DE BARRAS ===================== */
+let scannerAtivo = null;
+function carregarLibScanner(){
+  return new Promise((res, rej) => {
+    if(window.Html5Qrcode) return res();
+    const s = document.createElement("script");
+    s.src = "https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js";
+    s.onload = res;
+    s.onerror = () => rej(new Error("Precisa de internet pra abrir o leitor."));
+    document.head.appendChild(s);
+  });
+}
+async function abrirScanner(aoLer){
+  try{ await carregarLibScanner(); }catch(e){ toast(e.message, true); return; }
+  const ov = document.createElement("div");
+  ov.className = "scan-overlay";
+  ov.innerHTML = `<div class="scan-box">
+    <div class="scan-tit">Aponte pro código de barras</div>
+    <div id="scan-reader"></div>
+    <button class="btn btn-fantasma" id="scan-fechar" style="margin-top:10px">Cancelar</button>
+  </div>`;
+  document.body.appendChild(ov);
+  const fechar = async () => {
+    try{ if(scannerAtivo){ await scannerAtivo.stop(); scannerAtivo.clear(); } }catch(e){}
+    scannerAtivo = null; ov.remove();
+  };
+  $("#scan-fechar").onclick = fechar;
+  try{
+    scannerAtivo = new Html5Qrcode("scan-reader");
+    await scannerAtivo.start(
+      { facingMode: "environment" },
+      { fps: 10, qrbox: { width: 240, height: 140 } },
+      async (texto) => { await fechar(); if(navigator.vibrate) navigator.vibrate(80); aoLer(String(texto).trim()); },
+      () => {}
+    );
+  }catch(e){
+    await fechar();
+    toast("Câmera indisponível: " + (e && e.message ? e.message : "verifique a permissão no Safari."), true);
+  }
+}
+function campoCodigoBarras(idInput, idBtn, valor){
+  return `<div class="campo"><label>Código de barras</label>
+    <div style="display:flex;gap:8px">
+      <input id="${idInput}" value="${esc(valor||"")}" inputmode="numeric" placeholder="opcional" style="flex:1">
+      <button type="button" class="btn-scan" id="${idBtn}" title="Escanear com a câmera">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/><path d="M7 8v8M10.5 8v8M13.5 8v5M17 8v8"/></svg>
+      </button>
+    </div></div>`;
 }
 
 /* ===================== render: RECEBIMENTO DE LEITE ===================== */
@@ -1122,9 +1209,11 @@ function abrirModalQueijo(id){
       <div class="campo"><label>Rendimento (pç/L)</label><input id="q-rend" type="number" inputmode="decimal" value="${t.rendimento_esperado??""}" placeholder="opcional"></div>
       <div class="campo"><label>Unidade</label><select id="q-unid"><option value="peças" ${t.unidade!=="kg"?"selected":""}>peças</option><option value="kg" ${t.unidade==="kg"?"selected":""}>kg</option></select></div>
     </div>
+    ${campoCodigoBarras("q-cb","q-scan",t.codigo_barras)}
     <div class="erro" id="q-erro"></div>
     <button class="btn btn-primario" id="q-salvar">Salvar</button>
     ${botaoExcluir(id?"q-excluir":"","Excluir queijo")}`);
+  $("#q-scan").onclick = () => abrirScanner(c => { $("#q-cb").value = c; toast("Código lido: "+c); });
   $("#q-salvar").onclick = () => salvarQueijo(id);
   if(id) $("#q-excluir").onclick = () => excluirQueijo(id);
 }
@@ -1139,6 +1228,7 @@ async function salvarQueijo(id){
     dias_cura: parseInt($("#q-cura").value)||0,
     rendimento_esperado: parseFloat($("#q-rend").value)||null,
     unidade: $("#q-unid").value,
+    codigo_barras: $("#q-cb").value.trim() || null,
     preco_venda: preco_peca || preco_kg || 0
   };
   if(id){
@@ -1180,9 +1270,11 @@ function abrirModalInsumo(id){
       <div class="campo"><label>Unidade</label><input id="i-unid" value="${esc(i.unidade||"")}" placeholder="kg, L, un"></div>
     </div>
     <div class="campo"><label>Fornecedor</label><select id="i-forn">${opts}</select></div>
+    ${campoCodigoBarras("i-cb","i-scan",i.codigo_barras)}
     <div class="erro" id="i-erro"></div>
     <button class="btn btn-primario" id="i-salvar">Salvar</button>
     ${botaoExcluir(id?"i-excluir":"","Excluir insumo")}`);
+  $("#i-scan").onclick = () => abrirScanner(c => { $("#i-cb").value = c; toast("Código lido: "+c); });
   $("#i-salvar").onclick = () => salvarInsumo(id);
   if(id) $("#i-excluir").onclick = () => excluirInsumo(id);
 }
@@ -1194,7 +1286,8 @@ async function salvarInsumo(id){
     preco: parseFloat($("#i-preco").value)||0,
     quantidade: parseFloat($("#i-qtd").value)||null,
     unidade: $("#i-unid").value.trim()||null,
-    fornecedor_id: $("#i-forn").value || null
+    fornecedor_id: $("#i-forn").value || null,
+    codigo_barras: $("#i-cb").value.trim() || null
   };
   if(id){
     const i = state.insumos.find(x=>x.id===id);
