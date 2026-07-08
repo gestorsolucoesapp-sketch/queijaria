@@ -285,7 +285,7 @@ input,select{font-family:inherit;font-size:16px}
    ======================================================================= */
 const SUPABASE_URL      = "https://cadnmgaymgljmoadebkk.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uBKKvD_e5ef4326TvkFgcg_rRnjmTus";
-const APP_VER = "v6";                              // suba junto com o cache do sw.js
+const APP_VER = "v7";                              // suba junto com o cache do sw.js
 
 /* ===================== estado ===================== */
 let sb = null;
@@ -740,19 +740,19 @@ async function salvarRecebimento(id){
     state.recebimentos.sort((a,b)=>String(b.data).localeCompare(String(a.data)));
     fecharModal(); renderRecebimento(); toast("Recebimento atualizado.");
     const { error } = await sb.from("recebimentos_leite").update(dados).eq("id", id);
-    if(error){ Object.assign(r, bak); renderRecebimento(); toast("Não deu pra salvar.", true); }
+    if(error){ Object.assign(r, bak); renderRecebimento(); toast("Erro ao salvar: "+(error.message||error.code||"?"), true); }
   } else {
     const novo = { id:uid(), familia_id:familiaId, ...dados };
     state.recebimentos.unshift(novo); fecharModal(); renderRecebimento(); toast("Recebimento lançado.");
     const { error } = await sb.from("recebimentos_leite").insert(novo);
-    if(error){ state.recebimentos = state.recebimentos.filter(x=>x.id!==novo.id); renderRecebimento(); toast("Não deu pra salvar.", true); }
+    if(error){ state.recebimentos = state.recebimentos.filter(x=>x.id!==novo.id); renderRecebimento(); toast("Erro ao salvar: "+(error.message||error.code||"?"), true); }
   }
 }
 async function excluirRecebimento(id){
   const bak = state.recebimentos; state.recebimentos = state.recebimentos.filter(x=>x.id!==id);
   fecharModal(); renderRecebimento(); toast("Recebimento excluído.");
   const { error } = await sb.from("recebimentos_leite").delete().eq("id", id);
-  if(error){ state.recebimentos = bak; renderRecebimento(); toast("Não deu pra excluir.", true); }
+  if(error){ state.recebimentos = bak; renderRecebimento(); toast("Erro ao excluir: "+(error.message||error.code||"?"), true); }
 }
 
 /* ===================== render: CADASTRO ===================== */
