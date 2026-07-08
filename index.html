@@ -358,7 +358,7 @@ input,select{font-family:inherit;font-size:16px}
    ======================================================================= */
 const SUPABASE_URL      = "https://cadnmgaymgljmoadebkk.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uBKKvD_e5ef4326TvkFgcg_rRnjmTus";
-const APP_VER = "v27";
+const APP_VER = "v28";
 const SPLASH_MIN = 2400;
 const splashT0 = Date.now();                              // suba junto com o cache do sw.js
 
@@ -940,7 +940,7 @@ function abrirModalVenda(id){
   });
   atualizarCard();
   $("#v-salvar").onclick = () => salvarVenda(id);
-  if(id) $("#v-excluir").onclick = () => excluirVenda(id);
+  if(id) $("#v-excluir").onclick = () => confirmarComSenha("Apagar esta venda?", () => excluirVenda(id));
 }
 async function salvarVenda(id){
   const tipo_queijo_id = $("#v-tipo").value;
@@ -1365,7 +1365,7 @@ function abrirModalRecebimento(id, fornPre){
   $("#r-data").onchange = previa;
   previa();
   $("#r-salvar").onclick = () => salvarRecebimento(id);
-  if(id) $("#r-excluir").onclick = () => excluirRecebimento(id);
+  if(id) $("#r-excluir").onclick = () => confirmarComSenha("Apagar esta entrega de leite?", () => excluirRecebimento(id));
 }
 async function salvarRecebimento(id){
   const fornecedor_id = $("#r-forn").value;
@@ -1403,6 +1403,25 @@ function refreshCheques(){
   if(vc && !vc.classList.contains("hidden")) renderCheques(vc);
   else renderRecebimento();
 }
+function confirmarComSenha(msg, aoConfirmar){
+  abrirFolha(`
+    <h2>Confirmar exclusão</h2>
+    <p class="dica">${msg} <b>Não tem volta.</b></p>
+    <div class="campo"><label>Senha da sua conta</label><input id="cs-senha" type="password" autocomplete="current-password" placeholder="••••••••"></div>
+    <div class="erro" id="cs-erro"></div>
+    <button class="btn btn-primario" id="cs-ok" style="background:var(--vermelho)">Apagar</button>
+    <button class="btn btn-fantasma" id="cs-nao" style="margin-top:6px">Cancelar</button>`);
+  $("#cs-nao").onclick = fecharModal;
+  $("#cs-ok").onclick = async () => {
+    const senha = $("#cs-senha").value;
+    if(!senha){ $("#cs-erro").textContent = "Digite sua senha."; return; }
+    $("#cs-ok").disabled = true; $("#cs-ok").textContent = "Verificando…";
+    const { error } = await sb.auth.signInWithPassword({ email: sessao?.user?.email, password: senha });
+    if(error){ $("#cs-erro").textContent = "Senha incorreta."; $("#cs-ok").disabled = false; $("#cs-ok").textContent = "Apagar"; return; }
+    aoConfirmar();
+  };
+}
+
 function bomParaDe(c){ return addDias(c.data, Number(c.prazo_dias)||0); }
 
 function renderCheques(corpo){
@@ -1473,7 +1492,7 @@ function abrirModalCheque(id){
   };
   $("#c-data").onchange = previa; $("#c-prazo").oninput = previa; previa();
   $("#c-salvar").onclick = () => salvarCheque(id);
-  if(id) $("#c-excluir").onclick = () => excluirCheque(id);
+  if(id) $("#c-excluir").onclick = () => confirmarComSenha("Apagar este cheque?", () => excluirCheque(id));
 }
 async function salvarCheque(id){
   const para = $("#c-para").value.trim();
