@@ -189,6 +189,7 @@ input,select{font-family:inherit;font-size:16px}
 .graf-card{background:var(--card);border:1px solid var(--linha);border-radius:var(--r);
   padding:14px 14px 8px;margin-bottom:12px;box-shadow:var(--sombra)}
 .graf-cab{margin-bottom:8px}
+.link-forn{text-decoration:underline dotted var(--ouro);text-underline-offset:3px;cursor:pointer}
 .btn-scan{background:var(--ouro);color:#fff;border:none;border-radius:11px;width:48px;display:grid;place-items:center;cursor:pointer;flex:none}
 .scan-overlay{position:fixed;inset:0;background:rgba(20,16,10,.82);z-index:200;display:grid;place-items:center;padding:18px}
 .scan-box{background:var(--card);border-radius:var(--r);padding:16px;width:100%;max-width:360px;text-align:center}
@@ -305,7 +306,7 @@ input,select{font-family:inherit;font-size:16px}
    ======================================================================= */
 const SUPABASE_URL      = "https://cadnmgaymgljmoadebkk.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uBKKvD_e5ef4326TvkFgcg_rRnjmTus";
-const APP_VER = "v11";                              // suba junto com o cache do sw.js
+const APP_VER = "v12";                              // suba junto com o cache do sw.js
 
 /* ===================== estado ===================== */
 let sb = null;
@@ -771,6 +772,50 @@ function precoLitroPara(litros){
   return Number(state.config.preco_leite_padrao)||0;
 }
 
+function abrirDetalheFornecedor(fid){
+  const f = state.fornecedores.find(x=>x.id===fid);
+  if(!f) return;
+  const recs = state.recebimentos.filter(r => r.fornecedor_id === fid);
+  if(!recs.length){ toast("Sem recebimentos desse fornecedor."); return; }
+
+  // agrupar por dia
+  const porDia = {};
+  recs.forEach(r => {
+    const d = r.data;
+    if(!porDia[d]) porDia[d] = { litros:0, valor:0, pagos:0, qtd:0 };
+    porDia[d].litros += Number(r.litros)||0;
+    porDia[d].valor  += Number(r.valor_total)||0;
+    porDia[d].qtd++; if(r.pago) porDia[d].pagos++;
+  });
+  const diasComDados = Object.keys(porDia).sort().reverse();
+
+  // gráfico: últimos 14 dias
+  const DIAS = 14;
+  const dias = []; for(let i=DIAS-1;i>=0;i--) dias.push(addDias(hoje(),-i));
+  const valores = dias.map(d => porDia[d] ? porDia[d].litros : 0);
+
+  const totLitros = recs.reduce((s,r)=> s+(Number(r.litros)||0),0);
+  const totValor  = recs.reduce((s,r)=> s+(Number(r.valor_total)||0),0);
+
+  const lista = diasComDados.map(d => {
+    const x = porDia[d];
+    const st = x.pagos === x.qtd ? `<span class="pill-venc pago">pago</span>` : "";
+    return `<div class="tipo" style="padding:10px 12px">
+      <div><div class="nome" style="font-size:.86rem">${dataBR(d)} ${st}</div>
+      <div class="det">${num(x.litros)} L${x.qtd>1?` · ${x.qtd} entregas`:""}</div></div>
+      <div class="preco">${brl(x.valor)}</div>
+    </div>`;
+  }).join("");
+
+  abrirFolha(`
+    <h2>${esc(f.nome)}</h2>
+    <p class="dica" style="margin-top:-6px">${num(totLitros)} L no total · ${brl(totValor)} · paga em ${prazoRot(f.prazo_pagamento)}</p>
+    <div class="rotulo">Litros por dia · últimos ${DIAS} dias</div>
+    <div class="graf-card" style="margin-bottom:14px">${barrasSVG(valores, dias)}</div>
+    <div class="rotulo">Valores diários</div>
+    <div style="max-height:38vh;overflow-y:auto">${lista}</div>`);
+}
+
 function renderRecebimento(){
   const LEITE_ABAS = [["apagar","A pagar"],["historico","Histórico"],["graficos","Gráficos"]];
   const subnav = LEITE_ABAS.map(([k,r]) => `<a data-lab="${k}" class="${k===leiteAba?"ativo":""}">${r}</a>`).join("");
@@ -812,7 +857,7 @@ function renderLeiteAPagar(corpo){
       const quando = vencido ? (dias===0 ? "paga hoje" : `venceu ${dataBR(venc)}`) : `paga ${dataBR(venc)}`;
       return `<div class="tipo ${vencido?"vencido":""}" data-rec="${r.id}">
         <div>
-          <div class="nome">${esc(nomeForn(r.fornecedor_id))} <span class="pill-venc ${vencido?"on":""}">${quando}</span></div>
+          <div class="nome"><span class="link-forn" data-fdet="${r.fornecedor_id}">${esc(nomeForn(r.fornecedor_id))}</span> <span class="pill-venc ${vencido?"on":""}">${quando}</span></div>
           <div class="det">${dataBR(r.data)} · ${num(r.litros)} L × ${brl(r.preco_litro)}/L</div>
         </div>
         <div style="text-align:right">
@@ -825,6 +870,7 @@ function renderLeiteAPagar(corpo){
   corpo.innerHTML = html;
   $$("#leite-corpo [data-rec]").forEach(el => el.onclick = () => abrirModalRecebimento(el.dataset.rec));
   $$("#leite-corpo [data-pago]").forEach(b => b.onclick = (e) => { e.stopPropagation(); marcarPago(b.dataset.pago); });
+  $$("#leite-corpo [data-fdet]").forEach(s => s.onclick = (e) => { e.stopPropagation(); abrirDetalheFornecedor(s.dataset.fdet); });
 }
 
 async function marcarPago(id){
@@ -852,7 +898,7 @@ function renderLeiteHistorico(corpo){
     html += pagos.map(r => `
       <div class="tipo pago-item" data-rec="${r.id}">
         <div>
-          <div class="nome">${esc(nomeForn(r.fornecedor_id))} <span class="pill-venc pago">pago ${dataBR(r.pago_em)}</span></div>
+          <div class="nome"><span class="link-forn" data-fdet="${r.fornecedor_id}">${esc(nomeForn(r.fornecedor_id))}</span> <span class="pill-venc pago">pago ${dataBR(r.pago_em)}</span></div>
           <div class="det">entrega ${dataBR(r.data)} · ${num(r.litros)} L × ${brl(r.preco_litro)}/L</div>
         </div>
         <div class="preco">${brl(r.valor_total)}</div>
@@ -860,6 +906,7 @@ function renderLeiteHistorico(corpo){
   }
   corpo.innerHTML = html;
   $$("#leite-corpo [data-rec]").forEach(el => el.onclick = () => abrirModalRecebimento(el.dataset.rec));
+  $$("#leite-corpo [data-fdet]").forEach(s => s.onclick = (e) => { e.stopPropagation(); abrirDetalheFornecedor(s.dataset.fdet); });
 }
 
 function renderLeiteGraficos(corpo){
