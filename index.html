@@ -361,7 +361,7 @@ input,select{font-family:inherit;font-size:16px}
    ======================================================================= */
 const SUPABASE_URL      = "https://cadnmgaymgljmoadebkk.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uBKKvD_e5ef4326TvkFgcg_rRnjmTus";
-const APP_VER = "v31";
+const APP_VER = "v32";
 const SPLASH_MIN = 2400;
 const splashT0 = Date.now();                              // suba junto com o cache do sw.js
 
@@ -1065,13 +1065,15 @@ function abrirDetalheFornecedor(fid){
     <div class="rotulo">Ciclos</div>
     <div style="max-height:34vh;overflow-y:auto">${blocos}</div>`);
 
-  $$(".seg-prazo").forEach(b => b.onclick = async () => {
+  $$(".seg-prazo").forEach(b => b.onclick = () => {
     const novo = parseInt(b.dataset.prazo);
     if(novo === prazo) return;
-    const bak = f.prazo_pagamento; f.prazo_pagamento = novo;
-    abrirDetalheFornecedor(fid); toast(`Período: ${novo===1?"1 dia":novo+" dias"}.`);
-    const { error } = await sb.from("fornecedores").update({ prazo_pagamento: novo }).eq("id", fid);
-    if(error){ f.prazo_pagamento = bak; abrirDetalheFornecedor(fid); toast("Erro ao mudar o período: "+(error.message||"?"), true); }
+    confirmarComSenha(`Mudar o período de ${esc(f.nome)} para ${novo===1?"1 dia":novo+" dias"}? Os vencimentos serão recalculados.`, async () => {
+      const bak = f.prazo_pagamento; f.prazo_pagamento = novo;
+      abrirDetalheFornecedor(fid); toast(`Período: ${novo===1?"1 dia":novo+" dias"}.`);
+      const { error } = await sb.from("fornecedores").update({ prazo_pagamento: novo }).eq("id", fid);
+      if(error){ f.prazo_pagamento = bak; abrirDetalheFornecedor(fid); toast("Erro ao mudar o período: "+(error.message||"?"), true); }
+    });
   });
 }
 
@@ -1323,6 +1325,7 @@ function abrirModalPrazo(fid){
     <p class="dica" style="margin-top:-6px">${esc(f.nome)} — os vencimentos são recalculados na hora.</p>
     <div class="seg-linha">${chips}</div>
     <div class="campo"><label>Ou digite os dias que precisar</label><input id="pz-dias" type="number" inputmode="numeric" min="1" value="${atual}" placeholder="ex.: 17"></div>
+    <div class="campo"><label>Senha da sua conta</label><input id="pz-senha" type="password" autocomplete="current-password" placeholder="••••••••"></div>
     <div class="erro" id="pz-erro"></div>
     <button class="btn btn-primario" id="pz-salvar">Salvar</button>`);
   $$(".seg-prazo[data-chip]").forEach(b => b.onclick = () => {
@@ -1332,6 +1335,11 @@ function abrirModalPrazo(fid){
   $("#pz-salvar").onclick = async () => {
     const dias = parseInt($("#pz-dias").value)||0;
     if(dias < 1){ $("#pz-erro").textContent = "Informe pelo menos 1 dia."; return; }
+    const senha = $("#pz-senha").value;
+    if(!senha){ $("#pz-erro").textContent = "Digite sua senha pra confirmar."; return; }
+    $("#pz-salvar").disabled = true; $("#pz-salvar").textContent = "Verificando…";
+    const { error: authErr } = await sb.auth.signInWithPassword({ email: sessao?.user?.email, password: senha });
+    if(authErr){ $("#pz-erro").textContent = "Senha incorreta."; $("#pz-salvar").disabled = false; $("#pz-salvar").textContent = "Salvar"; return; }
     const bak = f.prazo_pagamento; f.prazo_pagamento = dias;
     fecharModal(); renderRecebimento(); toast(`Período de ${esc(f.nome)}: ${prazoRot(dias)}.`);
     const { error } = await sb.from("fornecedores").update({ prazo_pagamento: dias }).eq("id", fid);
@@ -1413,11 +1421,11 @@ function refreshCheques(){
 }
 function confirmarComSenha(msg, aoConfirmar){
   abrirFolha(`
-    <h2>Confirmar exclusão</h2>
-    <p class="dica">${msg} <b>Não tem volta.</b></p>
+    <h2>Confirmação</h2>
+    <p class="dica">${msg}</p>
     <div class="campo"><label>Senha da sua conta</label><input id="cs-senha" type="password" autocomplete="current-password" placeholder="••••••••"></div>
     <div class="erro" id="cs-erro"></div>
-    <button class="btn btn-primario" id="cs-ok" style="background:var(--vermelho)">Apagar</button>
+    <button class="btn btn-primario" id="cs-ok" style="background:var(--vermelho)">Confirmar</button>
     <button class="btn btn-fantasma" id="cs-nao" style="margin-top:6px">Cancelar</button>`);
   $("#cs-nao").onclick = fecharModal;
   $("#cs-ok").onclick = async () => {
@@ -1425,7 +1433,7 @@ function confirmarComSenha(msg, aoConfirmar){
     if(!senha){ $("#cs-erro").textContent = "Digite sua senha."; return; }
     $("#cs-ok").disabled = true; $("#cs-ok").textContent = "Verificando…";
     const { error } = await sb.auth.signInWithPassword({ email: sessao?.user?.email, password: senha });
-    if(error){ $("#cs-erro").textContent = "Senha incorreta."; $("#cs-ok").disabled = false; $("#cs-ok").textContent = "Apagar"; return; }
+    if(error){ $("#cs-erro").textContent = "Senha incorreta."; $("#cs-ok").disabled = false; $("#cs-ok").textContent = "Confirmar"; return; }
     aoConfirmar();
   };
 }
