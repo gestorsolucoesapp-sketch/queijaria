@@ -276,7 +276,25 @@ input,select{font-family:inherit;font-size:16px}
     <div class="erro" id="au-erro"></div>
     <button class="btn btn-primario" id="au-entrar" type="submit">Entrar</button>
     <button class="btn btn-fantasma" id="au-alternar" type="button" style="margin-top:6px">Não tem conta? Criar uma</button>
+    <button class="btn btn-fantasma" id="au-esqueci" type="button" style="margin-top:2px;font-size:.85rem">Esqueci minha senha</button>
   </form>
+</div>
+
+<!-- NOVA SENHA (após clicar no link do e-mail) -->
+<div id="tela-nova-senha" class="centro hidden">
+  <div class="marca">
+    <img src="logo.png" alt="" style="width:80px;height:80px;object-fit:contain;margin:0 auto 4px;display:block" onerror="this.style.display='none'">
+    <h1 class="serif">Nova senha</h1>
+    <p>Escolha uma senha nova pra sua conta.</p>
+  </div>
+  <div class="painel">
+    <div class="campo">
+      <label>Nova senha</label>
+      <input id="ns-senha" type="password" autocomplete="new-password" placeholder="mínimo 6 caracteres">
+    </div>
+    <div class="erro" id="ns-erro"></div>
+    <button class="btn btn-primario" id="ns-salvar">Salvar nova senha</button>
+  </div>
 </div>
 
 <!-- CRIAR FAMÍLIA -->
@@ -365,7 +383,7 @@ input,select{font-family:inherit;font-size:16px}
    ======================================================================= */
 const SUPABASE_URL      = "https://cadnmgaymgljmoadebkk.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uBKKvD_e5ef4326TvkFgcg_rRnjmTus";
-const APP_VER = "v35";
+const APP_VER = "v36";
 const SPLASH_MIN = 2400;
 const EMAIL_ADMIN = "jpferreira1356@icloud.com";
 const splashT0 = Date.now();                              // suba junto com o cache do sw.js
@@ -450,19 +468,26 @@ function iniciar(){
     return;
   }
   sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+  // veio do link de recuperação de senha?
+  const hash = location.hash || "";
+  const recuperando = hash.includes("type=recovery");
+
   sb.auth.getSession().then(({ data }) => {
+    if(recuperando){ mostrarTela("tela-nova-senha"); return; }
     if(data.session){ sessao = data.session; aposLogin(); }
     else mostrarTela("tela-auth");
   }).catch(()=> mostrarTela("tela-auth"));
 
-  sb.auth.onAuthStateChange((_e, s) => {
+  sb.auth.onAuthStateChange((ev, s) => {
     sessao = s;
+    if(ev === "PASSWORD_RECOVERY"){ mostrarTela("tela-nova-senha"); return; }
     if(!s){ familiaId = null; mostrarTela("tela-auth"); }
   });
 }
 
 function mostrarTela(id){
-  ["tela-carregando","tela-auth","tela-familia","app"].forEach(t =>
+  ["tela-carregando","tela-auth","tela-familia","tela-nova-senha","app"].forEach(t =>
     $("#"+t).classList.toggle("hidden", t !== id));
 }
 
@@ -473,6 +498,41 @@ $("#au-alternar").onclick = () => {
   $("#au-entrar").textContent = modoCadastro ? "Criar conta" : "Entrar";
   $("#au-alternar").textContent = modoCadastro ? "Já tenho conta. Entrar" : "Não tem conta? Criar uma";
   $("#au-erro").textContent = "";
+};
+$("#au-esqueci").onclick = async () => {
+  const email = $("#au-email").value.trim();
+  const err = $("#au-erro");
+  if(!email){ err.textContent = "Digite seu e-mail acima primeiro."; return; }
+  $("#au-esqueci").disabled = true;
+  try{
+    const { error } = await sb.auth.resetPasswordForEmail(email, {
+      redirectTo: location.origin + location.pathname
+    });
+    if(error) throw error;
+    err.textContent = "";
+    toast("Link enviado! Veja seu e-mail pra criar a senha nova.");
+  }catch(e){
+    err.textContent = traduzErro(e.message);
+  }finally{
+    $("#au-esqueci").disabled = false;
+  }
+};
+// salvar nova senha (quando volta do link do e-mail)
+$("#ns-salvar").onclick = async () => {
+  const nova = $("#ns-senha").value;
+  if(!nova || nova.length < 6){ $("#ns-erro").textContent = "Mínimo de 6 caracteres."; return; }
+  $("#ns-salvar").disabled = true;
+  try{
+    const { error } = await sb.auth.updateUser({ password: nova });
+    if(error) throw error;
+    toast("Senha alterada! Já pode usar.");
+    const { data } = await sb.auth.getSession();
+    sessao = data.session;
+    if(sessao) aposLogin(); else mostrarTela("tela-auth");
+  }catch(e){
+    $("#ns-erro").textContent = traduzErro(e.message);
+    $("#ns-salvar").disabled = false;
+  }
 };
 $("#au-form").addEventListener("submit", async (ev) => {
   ev.preventDefault();
