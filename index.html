@@ -195,6 +195,8 @@ input,select{font-family:inherit;font-size:16px}
   animation:logoPulse 2.2s ease-in-out .5s infinite}
 .splash-nome{font-size:1.55rem;font-weight:700;color:var(--tinta);opacity:0;
   animation:nomeSobe .55s ease-out .25s forwards}
+.splash-frase{font-size:.9rem;color:var(--tinta-mole);font-style:italic;margin-top:-6px;opacity:0;
+  animation:nomeSobe .55s ease-out .4s forwards}
 .splash-barra{width:120px;height:4px;border-radius:4px;background:var(--linha);overflow:hidden;opacity:0;
   animation:nomeSobe .5s ease-out .45s forwards}
 .splash-barra i{display:block;width:44%;height:100%;border-radius:4px;background:var(--ouro);
@@ -203,6 +205,15 @@ input,select{font-family:inherit;font-size:16px}
 @keyframes logoPulse{0%,100%{opacity:1}50%{opacity:.72}}
 @keyframes nomeSobe{from{opacity:0;translate:0 8px}to{opacity:1;translate:0 0}}
 @keyframes barraVai{0%{margin-left:-46%}100%{margin-left:102%}}
+.catalogo{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.cat-card{background:var(--card);border:1px solid var(--linha);border-radius:var(--r);overflow:hidden;
+  box-shadow:var(--sombra);cursor:pointer}
+.cat-card img{width:100%;aspect-ratio:1;object-fit:cover;display:block}
+.cat-sem-foto{width:100%;aspect-ratio:1;display:grid;place-items:center;font-size:2.6rem;background:var(--fundo)}
+.cat-info{padding:10px 12px}
+.cat-nome{font-weight:700;font-size:.88rem;margin-bottom:4px}
+.cat-preco{font-size:.78rem;color:var(--tinta-mole);line-height:1.5}
+.cat-preco b{color:var(--ouro-esc);font-family:"IBM Plex Mono",monospace}
 .prod-card{display:flex;gap:10px;align-items:center;background:var(--fundo);border:1px dashed var(--linha-forte);border-radius:12px;padding:10px 12px;margin-bottom:12px}
 .prod-card:empty{display:none}
 .link-forn{text-decoration:underline dotted var(--ouro);text-underline-offset:3px;cursor:pointer}
@@ -228,6 +239,7 @@ input,select{font-family:inherit;font-size:16px}
   <div class="splash">
     <img src="logo.png" alt="" class="splash-logo" onerror="this.style.display='none'">
     <div class="splash-nome serif">Queijaria Bene</div>
+    <div class="splash-frase">Da nossa para sua família</div>
     <div class="splash-barra"><i></i></div>
   </div>
 </div>
@@ -343,7 +355,7 @@ input,select{font-family:inherit;font-size:16px}
    ======================================================================= */
 const SUPABASE_URL      = "https://cadnmgaymgljmoadebkk.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uBKKvD_e5ef4326TvkFgcg_rRnjmTus";
-const APP_VER = "v23";
+const APP_VER = "v24";
 const SPLASH_MIN = 2400;
 const splashT0 = Date.now();                              // suba junto com o cache do sw.js
 
@@ -1498,7 +1510,7 @@ async function excluirCheque(id){
 
 /* ===================== render: CADASTRO ===================== */
 let cadAba = "fornecedores";
-const CAD_ABAS = [["fornecedores","Fornecedores"],["leite","Leite"],["queijos","Queijos"],["insumos","Insumos"]];
+const CAD_ABAS = [["fornecedores","Fornec."],["leite","Leite"],["queijos","Queijos"],["insumos","Insumos"],["catalogo","Catálogo"]];
 
 function prazoRot(d){ d = Number(d)||0; return d === 1 ? "1 dia" : `${d} dias`; }
 function ordenarPorNome(arr){ arr.sort((a,b)=>String(a.nome||"").localeCompare(String(b.nome||""))); }
@@ -1518,6 +1530,30 @@ function renderCadastro(){
   else if(cadAba === "leite")   renderLeite(corpo);
   else if(cadAba === "queijos") renderQueijos(corpo);
   else if(cadAba === "insumos") renderInsumos(corpo);
+  else if(cadAba === "catalogo") renderCatalogo(corpo);
+}
+
+function renderCatalogo(corpo){
+  let html = `<div class="rotulo">Catálogo de produtos</div>`;
+  if(!state.tipos.length){
+    html += vazioCad("Cadastre queijos com foto e preço<br>pra montar seu catálogo aqui.");
+  } else {
+    html += `<div class="catalogo">` + state.tipos.map(t => {
+      const foto = t.foto_url
+        ? `<img src="${t.foto_url}" loading="lazy">`
+        : `<div class="cat-sem-foto">🧀</div>`;
+      const precos = [t.preco_peca?`<b>${brl(t.preco_peca)}</b> pç`:"", t.preco_kg?`<b>${brl(t.preco_kg)}</b> kg`:""].filter(Boolean).join("<br>") || "<b>—</b>";
+      return `<div class="cat-card" data-queijo="${t.id}">
+        ${foto}
+        <div class="cat-info">
+          <div class="cat-nome">${esc(t.nome)}</div>
+          <div class="cat-preco">${precos}</div>
+        </div>
+      </div>`;
+    }).join("") + `</div>`;
+  }
+  corpo.innerHTML = html;
+  corpo.querySelectorAll("[data-queijo]").forEach(el => el.onclick = () => abrirModalQueijo(el.dataset.queijo));
 }
 
 function renderFornecedores(corpo){
