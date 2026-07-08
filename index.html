@@ -178,6 +178,17 @@ input,select{font-family:inherit;font-size:16px}
 .tipo .ver{color:var(--tinta-mole);font-size:1.4rem;line-height:1;padding-left:8px}
 .verbadge{font-size:.62rem;font-weight:700;color:var(--tinta-mole);background:var(--linha);
   padding:2px 6px;border-radius:20px;margin-left:6px;letter-spacing:.5px;vertical-align:middle}
+.tipo.vencido{border:1.5px solid var(--vermelho);box-shadow:0 0 0 3px rgba(192,57,43,.08)}
+.pill-venc{font-size:.62rem;font-weight:700;color:var(--tinta-mole);background:var(--linha);
+  padding:2px 7px;border-radius:20px;margin-left:6px;white-space:nowrap;vertical-align:middle}
+.pill-venc.on{background:var(--vermelho);color:#fff}
+.pill-venc.pago{background:var(--verde);color:#fff}
+.btn-pago{margin-top:6px;background:var(--verde);color:#fff;border:none;border-radius:9px;
+  padding:6px 14px;font-weight:700;font-size:.8rem;font-family:inherit;cursor:pointer}
+.stat.r .n{color:var(--vermelho)}
+.graf-card{background:var(--card);border:1px solid var(--linha);border-radius:var(--r);
+  padding:14px 14px 8px;margin-bottom:12px;box-shadow:var(--sombra)}
+.graf-cab{margin-bottom:8px}
 </style>
 </head>
 <body>
@@ -285,7 +296,7 @@ input,select{font-family:inherit;font-size:16px}
    ======================================================================= */
 const SUPABASE_URL      = "https://cadnmgaymgljmoadebkk.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uBKKvD_e5ef4326TvkFgcg_rRnjmTus";
-const APP_VER = "v8";                              // suba junto com o cache do sw.js
+const APP_VER = "v9";                              // suba junto com o cache do sw.js
 
 /* ===================== estado ===================== */
 let sb = null;
@@ -655,6 +666,7 @@ function renderProducao(){
 
 /* ===================== render: RECEBIMENTO DE LEITE ===================== */
 function nomeForn(id){ const f = state.fornecedores.find(x=>x.id===id); return f ? f.nome : "Fornecedor"; }
+let leiteAba = "apagar";
 function mesAtual(){ return hoje().slice(0,7); }
 
 // preço por litro conforme a quantidade (faixa) ou preço padrão
@@ -667,32 +679,142 @@ function precoLitroPara(litros){
 }
 
 function renderRecebimento(){
-  const recs = state.recebimentos;
-  const doMes = recs.filter(r => (r.data||"").slice(0,7) === mesAtual());
+  const LEITE_ABAS = [["apagar","A pagar"],["historico","Histórico"],["graficos","Gráficos"]];
+  const subnav = LEITE_ABAS.map(([k,r]) => `<a data-lab="${k}" class="${k===leiteAba?"ativo":""}">${r}</a>`).join("");
+  $("#view-leite").innerHTML = `<div class="subnav">${subnav}</div><div id="leite-corpo"></div>`;
+  $$("#view-leite .subnav a").forEach(a => a.onclick = () => { leiteAba = a.dataset.lab; renderRecebimento(); });
+  const corpo = $("#leite-corpo");
+  if(leiteAba === "apagar")    renderLeiteAPagar(corpo);
+  else if(leiteAba === "historico") renderLeiteHistorico(corpo);
+  else renderLeiteGraficos(corpo);
+}
+
+function vencimentoDe(r){
+  const f = state.fornecedores.find(x=>x.id===r.fornecedor_id);
+  return addDias(r.data, f ? (Number(f.prazo_pagamento)||30) : 30);
+}
+
+function renderLeiteAPagar(corpo){
+  const recs = state.recebimentos.filter(r => !r.pago);
+  const doMes = state.recebimentos.filter(r => (r.data||"").slice(0,7) === mesAtual());
   const litrosMes = doMes.reduce((s,r)=> s + (Number(r.litros)||0), 0);
-  const valorMes  = doMes.reduce((s,r)=> s + (Number(r.valor_total)||0), 0);
+  const vencidos = recs.filter(r => diffDias(vencimentoDe(r)) <= 0);
+  const valorVencido = vencidos.reduce((s,r)=> s + (Number(r.valor_total)||0), 0);
 
   let html = `
     <div class="resumo">
       <div class="stat g"><div class="n">${num(litrosMes)}</div><div class="l">litros no mês</div></div>
-      <div class="stat a"><div class="n" style="font-size:1.05rem">${brl(valorMes)}</div><div class="l">a pagar no mês</div></div>
+      <div class="stat ${vencidos.length?"r":"a"}"><div class="n" style="font-size:1.05rem">${brl(valorVencido)}</div><div class="l">${vencidos.length?"vencido — pagar":"nada vencido"}</div></div>
     </div>
-    <div class="rotulo">Recebimentos</div>`;
+    <div class="rotulo">A pagar</div>`;
 
   if(!recs.length){
     html += vazioCad("Toque no <b>+</b> pra lançar uma entrega:<br>fornecedor, data e litros. O preço é calculado sozinho.");
   } else {
-    html += recs.map(r => `
-      <div class="tipo" data-rec="${r.id}">
+    const ord = [...recs].sort((a,b)=> vencimentoDe(a).localeCompare(vencimentoDe(b)));
+    html += ord.map(r => {
+      const venc = vencimentoDe(r);
+      const dias = diffDias(venc);
+      const vencido = dias <= 0;
+      const quando = vencido ? (dias===0 ? "paga hoje" : `venceu ${dataBR(venc)}`) : `paga ${dataBR(venc)}`;
+      return `<div class="tipo ${vencido?"vencido":""}" data-rec="${r.id}">
         <div>
-          <div class="nome">${esc(nomeForn(r.fornecedor_id))}</div>
+          <div class="nome">${esc(nomeForn(r.fornecedor_id))} <span class="pill-venc ${vencido?"on":""}">${quando}</span></div>
           <div class="det">${dataBR(r.data)} · ${num(r.litros)} L × ${brl(r.preco_litro)}/L</div>
+        </div>
+        <div style="text-align:right">
+          <div class="preco">${brl(r.valor_total)}</div>
+          ${vencido?`<button class="btn-pago" data-pago="${r.id}">Pago</button>`:""}
+        </div>
+      </div>`;
+    }).join("");
+  }
+  corpo.innerHTML = html;
+  $$("#leite-corpo [data-rec]").forEach(el => el.onclick = () => abrirModalRecebimento(el.dataset.rec));
+  $$("#leite-corpo [data-pago]").forEach(b => b.onclick = (e) => { e.stopPropagation(); marcarPago(b.dataset.pago); });
+}
+
+async function marcarPago(id){
+  const r = state.recebimentos.find(x=>x.id===id);
+  if(!r) return;
+  const bak = { pago:r.pago, pago_em:r.pago_em };
+  r.pago = true; r.pago_em = hoje();
+  renderRecebimento(); toast("Pago. Foi pro histórico.");
+  const { error } = await sb.from("recebimentos_leite").update({ pago:true, pago_em:r.pago_em }).eq("id", id);
+  if(error){ Object.assign(r, bak); renderRecebimento(); toast("Erro ao marcar pago: "+(error.message||"?"), true); }
+}
+
+function renderLeiteHistorico(corpo){
+  const pagos = state.recebimentos.filter(r => r.pago).sort((a,b)=> String(b.pago_em||b.data).localeCompare(String(a.pago_em||a.data)));
+  const totalPago = pagos.reduce((s,r)=> s + (Number(r.valor_total)||0), 0);
+  let html = `
+    <div class="resumo">
+      <div class="stat v"><div class="n">${pagos.length}</div><div class="l">pagamentos</div></div>
+      <div class="stat a"><div class="n" style="font-size:1.05rem">${brl(totalPago)}</div><div class="l">total pago</div></div>
+    </div>
+    <div class="rotulo">Histórico de pagamentos</div>`;
+  if(!pagos.length){
+    html += vazioCad("Quando você tocar em <b>Pago</b> num recebimento vencido,<br>ele aparece aqui.");
+  } else {
+    html += pagos.map(r => `
+      <div class="tipo pago-item" data-rec="${r.id}">
+        <div>
+          <div class="nome">${esc(nomeForn(r.fornecedor_id))} <span class="pill-venc pago">pago ${dataBR(r.pago_em)}</span></div>
+          <div class="det">entrega ${dataBR(r.data)} · ${num(r.litros)} L × ${brl(r.preco_litro)}/L</div>
         </div>
         <div class="preco">${brl(r.valor_total)}</div>
       </div>`).join("");
   }
-  $("#view-leite").innerHTML = html;
-  $$("#view-leite [data-rec]").forEach(el => el.onclick = () => abrirModalRecebimento(el.dataset.rec));
+  corpo.innerHTML = html;
+  $$("#leite-corpo [data-rec]").forEach(el => el.onclick = () => abrirModalRecebimento(el.dataset.rec));
+}
+
+function renderLeiteGraficos(corpo){
+  const DIAS = 14;
+  const dias = []; for(let i=DIAS-1;i>=0;i--) dias.push(addDias(hoje(),-i));
+  const fornsComDados = state.fornecedores.filter(f => state.recebimentos.some(r => r.fornecedor_id === f.id));
+  let html = `<div class="rotulo">Litros por dia · últimos ${DIAS} dias</div>`;
+  if(!fornsComDados.length){
+    html += vazioCad("Lance recebimentos pra ver os gráficos<br>de cada fornecedor aqui.");
+  } else {
+    html += fornsComDados.map(f => {
+      const porDia = dias.map(d => state.recebimentos
+        .filter(r => r.fornecedor_id === f.id && r.data === d)
+        .reduce((s,r)=> s + (Number(r.litros)||0), 0));
+      const totLitros = porDia.reduce((a,b)=>a+b,0);
+      const totValor = state.recebimentos
+        .filter(r => r.fornecedor_id === f.id && dias.includes(r.data))
+        .reduce((s,r)=> s + (Number(r.valor_total)||0), 0);
+      return `<div class="graf-card">
+        <div class="graf-cab">
+          <div><div class="nome">${esc(f.nome)}</div><div class="det">${num(totLitros)} L no período · ${brl(totValor)}</div></div>
+        </div>
+        ${barrasSVG(porDia, dias)}
+      </div>`;
+    }).join("");
+  }
+  corpo.innerHTML = html;
+}
+
+function barrasSVG(valores, dias){
+  const W=320, H=110, PAD=4, GAP=3;
+  const n = valores.length;
+  const bw = (W - PAD*2 - GAP*(n-1)) / n;
+  const max = Math.max(...valores, 1);
+  const barras = valores.map((v,i)=>{
+    const h = v>0 ? Math.max(3, (v/max)*(H-34)) : 2;
+    const x = PAD + i*(bw+GAP);
+    const y = H-22-h;
+    const cor = v>0 ? "var(--ouro)" : "var(--linha)";
+    const rot = v>0 && bw>14 ? `<text x="${x+bw/2}" y="${y-4}" text-anchor="middle" font-size="8" fill="#8a7f68" font-family="'IBM Plex Mono',monospace">${Math.round(v)}</text>` : "";
+    return `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${bw.toFixed(1)}" height="${h.toFixed(1)}" rx="2" fill="${cor}"/>${rot}`;
+  }).join("");
+  const rotulos = dias.map((d,i)=>{
+    if(n>7 && i%2!==0 && i!==n-1) return "";
+    const x = PAD + i*(bw+GAP) + bw/2;
+    return `<text x="${x.toFixed(1)}" y="${H-8}" text-anchor="middle" font-size="7.5" fill="#8a7f68" font-family="'IBM Plex Mono',monospace">${d.slice(8,10)}/${d.slice(5,7)}</text>`;
+  }).join("");
+  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block">${barras}${rotulos}</svg>`;
 }
 
 function abrirModalRecebimento(id){
@@ -717,11 +839,15 @@ function abrirModalRecebimento(id){
   const previa = () => {
     const litros = parseFloat($("#r-litros").value)||0;
     const pl = precoLitroPara(litros);
+    const f = state.fornecedores.find(x=>x.id===$("#r-forn").value);
+    const venc = addDias($("#r-data").value||hoje(), f?(Number(f.prazo_pagamento)||30):30);
     $("#r-previa").innerHTML = litros>0
-      ? `Preço: <b>${brl(pl)}/L</b> — total <b>${brl(litros*pl)}</b>`
+      ? `Preço: <b>${brl(pl)}/L</b> — total <b>${brl(litros*pl)}</b><br>Pagamento: <b>${dataBR(venc)}</b> (${prazoRot(f?f.prazo_pagamento:30)})`
       : "Informe os litros pra calcular o valor.";
   };
   $("#r-litros").oninput = previa;
+  $("#r-forn").onchange = previa;
+  $("#r-data").onchange = previa;
   previa();
   $("#r-salvar").onclick = () => salvarRecebimento(id);
   if(id) $("#r-excluir").onclick = () => excluirRecebimento(id);
