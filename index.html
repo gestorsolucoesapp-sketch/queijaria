@@ -189,6 +189,10 @@ input,select{font-family:inherit;font-size:16px}
 .graf-card{background:var(--card);border:1px solid var(--linha);border-radius:var(--r);
   padding:14px 14px 8px;margin-bottom:12px;box-shadow:var(--sombra)}
 .graf-cab{margin-bottom:8px}
+.adm-online{display:flex;align-items:center;gap:12px;background:var(--card);border:1px solid var(--linha);border-radius:12px;padding:12px 14px;box-shadow:var(--sombra)}
+.adm-count{width:40px;height:40px;border-radius:11px;background:var(--verde);color:#fff;display:grid;place-items:center;font-weight:800;font-size:1.1rem;flex:none}
+.adm-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+.adm-grid .stat{background:var(--card);border:1px solid var(--linha);border-radius:12px;padding:10px 8px;text-align:center;box-shadow:var(--sombra)}
 .mini-acao{display:grid;place-items:center;width:30px;height:30px;border-radius:9px;border:1px solid var(--linha);
   background:var(--card);color:var(--tinta-mole);cursor:pointer;flex:none;margin-left:4px}
 .mini-acao.del{color:var(--vermelho);border-color:rgba(192,57,43,.3)}
@@ -361,8 +365,9 @@ input,select{font-family:inherit;font-size:16px}
    ======================================================================= */
 const SUPABASE_URL      = "https://cadnmgaymgljmoadebkk.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uBKKvD_e5ef4326TvkFgcg_rRnjmTus";
-const APP_VER = "v34";
+const APP_VER = "v35";
 const SPLASH_MIN = 2400;
+const EMAIL_ADMIN = "jpferreira1356@icloud.com";
 const splashT0 = Date.now();                              // suba junto com o cache do sw.js
 
 /* ===================== estado ===================== */
@@ -769,15 +774,106 @@ function renderProducao(){
 }
 
 /* ===================== CONFIGURAÇÕES ===================== */
+function ehAdmin(){ return (sessao?.user?.email || "").toLowerCase() === EMAIL_ADMIN; }
 function abrirModalConfig(){
   abrirFolha(`
     <h2>Configurações</h2>
+    ${ehAdmin() ? `<button class="btn btn-primario" id="cfg-admin" style="margin-bottom:14px">📊 Painel do administrador</button>` : ""}
     <div class="rotulo" style="margin-top:4px">Zona de perigo</div>
     <p class="dica">Apaga <b>todos os dados</b> da queijaria: fornecedores, queijos, insumos, recebimentos, lotes, faixas de preço e configurações. A conta e a família continuam. <b>Não tem volta.</b></p>
     <div class="campo"><label>Confirme com a senha da sua conta</label><input id="cfg-senha" type="password" autocomplete="current-password" placeholder="••••••••"></div>
     <div class="erro" id="cfg-erro"></div>
     <button class="btn btn-primario" id="cfg-zerar" style="background:var(--vermelho)">Começar do zero</button>`);
   $("#cfg-zerar").onclick = comecarDoZero;
+  if(ehAdmin()) $("#cfg-admin").onclick = abrirPainelAdmin;
+}
+
+/* ===================== PAINEL DO ADMINISTRADOR ===================== */
+let presenceCanal = null;
+const meuDispositivo = (() => {
+  let id = null;
+  try { id = localStorage.getItem("disp_id"); if(!id){ id = uid(); localStorage.setItem("disp_id", id); } } catch(e){ id = uid(); }
+  return id;
+})();
+function nomeDispositivo(){
+  const ua = navigator.userAgent;
+  let s = "Aparelho";
+  if(/iPhone/.test(ua)) s = "iPhone";
+  else if(/iPad/.test(ua)) s = "iPad";
+  else if(/Android/.test(ua)) s = "Android";
+  else if(/Macintosh/.test(ua)) s = "Mac";
+  else if(/Windows/.test(ua)) s = "Windows";
+  return s;
+}
+
+async function abrirPainelAdmin(){
+  // presença: quantos dispositivos online
+  if(!presenceCanal){
+    presenceCanal = sb.channel("presenca-" + familiaId, { config: { presence: { key: meuDispositivo } } });
+    presenceCanal.on("presence", { event: "sync" }, () => { if($("#adm-online")) pintarOnline(); });
+    presenceCanal.subscribe(async (st) => {
+      if(st === "SUBSCRIBED") await presenceCanal.track({ nome: nomeDispositivo(), desde: Date.now() });
+    });
+  }
+
+  // números do negócio
+  const hj = hoje(), mes = mesAtual();
+  const litrosMes = state.recebimentos.filter(r=>(r.data||"").slice(0,7)===mes).reduce((a,r)=>a+(Number(r.litros)||0),0);
+  const aPagar = state.recebimentos.filter(r=>!r.pago).reduce((a,r)=>a+(Number(r.valor_total)||0),0);
+  const vendasHoje = state.vendas.filter(v=>v.data===hj).reduce((a,v)=>a+(Number(v.valor_total)||0),0);
+  const vendasMes = state.vendas.filter(v=>(v.data||"").slice(0,7)===mes).reduce((a,v)=>a+(Number(v.valor_total)||0),0);
+  const chqPend = state.cheques.filter(c=>!c.compensado).reduce((a,c)=>a+(Number(c.valor)||0),0);
+
+  // feed: últimas ações por criado_em
+  const eventos = [];
+  state.recebimentos.forEach(r => eventos.push({ t:r.criado_em, ic:"🥛", txt:`Recebimento · ${nomeForn(r.fornecedor_id)} · ${num(r.litros)} L`, v:r.valor_total }));
+  state.vendas.forEach(v => { const t=state.tipos.find(x=>x.id===v.tipo_queijo_id); eventos.push({ t:v.criado_em, ic:"🛒", txt:`Venda · ${t?t.nome:"produto"} · ${num(v.quantidade,2)} ${v.unidade||""}`, v:v.valor_total }); });
+  state.cheques.forEach(c => eventos.push({ t:c.criado_em, ic:"📝", txt:`Cheque · ${c.para||"—"}`, v:c.valor }));
+  state.lotes.forEach(l => { const t=state.tipos.find(x=>x.id===l.tipo_queijo_id); eventos.push({ t:l.criado_em, ic:"🧀", txt:`Produção · ${t?t.nome:"lote"} · ${num(l.pecas_produzidas||0)} pç`, v:null }); });
+  const feed = eventos.filter(e=>e.t).sort((a,b)=> String(b.t).localeCompare(String(a.t))).slice(0,25);
+
+  const stat = (n,l,cor) => `<div class="stat" style="--c:${cor}"><div class="n" style="font-size:1rem;color:${cor}">${n}</div><div class="l">${l}</div></div>`;
+
+  abrirFolha(`
+    <h2>Painel do administrador</h2>
+    <div class="rotulo">Dispositivos online agora</div>
+    <div id="adm-online" class="adm-online"><span class="dica">carregando…</span></div>
+    <div class="rotulo" style="margin-top:14px">Números</div>
+    <div class="adm-grid">
+      ${stat(num(litrosMes)+" L","leite no mês","var(--ouro-esc)")}
+      ${stat(brl(aPagar),"a pagar (leite)","var(--vermelho)")}
+      ${stat(brl(vendasHoje),"vendas hoje","var(--verde)")}
+      ${stat(brl(vendasMes),"vendas no mês","var(--azul)")}
+      ${stat(brl(chqPend),"cheques pendentes","var(--tinta)")}
+      ${stat(state.tipos.length,"produtos","var(--tinta-mole)")}
+    </div>
+    <div class="rotulo" style="margin-top:14px">Últimas ações</div>
+    <div style="max-height:38vh;overflow-y:auto">
+      ${feed.length ? feed.map(e => `
+        <div class="tipo" style="padding:9px 12px">
+          <div><div class="nome" style="font-size:.84rem">${e.ic} ${esc(e.txt)}</div>
+          <div class="det">${feedQuando(e.t)}</div></div>
+          ${e.v!=null?`<div class="preco" style="font-size:.82rem">${brl(e.v)}</div>`:""}
+        </div>`).join("") : vazioCad("Sem atividade ainda.")}
+    </div>`);
+  pintarOnline();
+}
+function pintarOnline(){
+  const box = $("#adm-online"); if(!box || !presenceCanal) return;
+  const st = presenceCanal.presenceState();
+  const disp = Object.values(st).map(arr => arr[0]).filter(Boolean);
+  box.innerHTML = `<div class="adm-count">${disp.length}</div><div>
+    <div class="nome" style="font-size:.9rem">${disp.length===1?"1 aparelho":disp.length+" aparelhos"} conectado${disp.length===1?"":"s"}</div>
+    <div class="det">${disp.map(d=>esc(d.nome||"Aparelho")).join(" · ")||"—"}</div></div>`;
+}
+function feedQuando(t){
+  const d = new Date(t); const ms = Date.now() - d.getTime();
+  const min = Math.floor(ms/60000);
+  if(min < 1) return "agora mesmo";
+  if(min < 60) return `há ${min} min`;
+  const h = Math.floor(min/60);
+  if(h < 24) return `há ${h}h`;
+  return dataBR(t.slice(0,10)) + " " + d.toTimeString().slice(0,5);
 }
 async function comecarDoZero(){
   const senha = $("#cfg-senha").value;
