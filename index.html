@@ -247,6 +247,7 @@ input,select{font-family:inherit;font-size:16px}
   <main class="conteudo">
     <div id="view-inicio" class="view"></div>
     <div id="view-producao" class="view hidden"></div>
+    <div id="view-leite" class="view hidden"></div>
     <div id="view-cadastro" class="view hidden"></div>
   </main>
 
@@ -262,6 +263,10 @@ input,select{font-family:inherit;font-size:16px}
     <a data-nav="producao">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11 20 7v10L4 13z"/><circle cx="9" cy="12" r="1"/><circle cx="14" cy="11" r="1"/></svg>
       Produção
+    </a>
+    <a data-nav="leite">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2h8l-1 3H9L8 2Z"/><path d="M7 5h10l-1.2 15.2a1 1 0 0 1-1 .8H9.2a1 1 0 0 1-1-.8L7 5Z"/><path d="M7.6 11h8.8"/></svg>
+      Leite
     </a>
     <a data-nav="cadastro">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 7h8M8 11h8M8 15h5"/></svg>
@@ -280,7 +285,7 @@ input,select{font-family:inherit;font-size:16px}
    ======================================================================= */
 const SUPABASE_URL      = "https://cadnmgaymgljmoadebkk.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uBKKvD_e5ef4326TvkFgcg_rRnjmTus";
-const APP_VER = "v4";                              // suba junto com o cache do sw.js
+const APP_VER = "v5";                              // suba junto com o cache do sw.js
 
 /* ===================== estado ===================== */
 let sb = null;
@@ -288,7 +293,7 @@ let sessao = null;
 let familiaId = null;
 let familiaNome = "";
 let privado = false;
-const state = { tipos: [], lotes: [], fornecedores: [], leiteFaixas: [], insumos: [], config: {} };
+const state = { tipos: [], lotes: [], fornecedores: [], leiteFaixas: [], insumos: [], config: {}, recebimentos: [] };
 
 /* ===================== utilidades ===================== */
 const $  = (s, r=document) => r.querySelector(s);
@@ -464,16 +469,17 @@ $("#fam-criar").onclick = async () => {
 /* ===================== dados ===================== */
 async function carregarTudo(){
   const q = (p) => p.then(r => r.data || []).catch(() => []);
-  const [t, l, f, lf, ins] = await Promise.all([
+  const [t, l, f, lf, ins, rec] = await Promise.all([
     q(sb.from("tipos_queijo").select("*").eq("familia_id", familiaId).order("nome")),
     q(sb.from("lotes").select("*").eq("familia_id", familiaId).order("data_fabricacao", { ascending:false })),
     q(sb.from("fornecedores").select("*").eq("familia_id", familiaId).order("nome")),
     q(sb.from("leite_faixas").select("*").eq("familia_id", familiaId).order("litros_de")),
-    q(sb.from("insumos").select("*").eq("familia_id", familiaId).order("nome"))
+    q(sb.from("insumos").select("*").eq("familia_id", familiaId).order("nome")),
+    q(sb.from("recebimentos_leite").select("*").eq("familia_id", familiaId).order("data", { ascending:false }))
   ]);
   let cfg = {};
   try { const r = await sb.from("queijaria_config").select("*").eq("familia_id", familiaId).maybeSingle(); cfg = r.data || {}; } catch(e){}
-  state.tipos = t; state.lotes = l; state.fornecedores = f; state.leiteFaixas = lf; state.insumos = ins; state.config = cfg;
+  state.tipos = t; state.lotes = l; state.fornecedores = f; state.leiteFaixas = lf; state.insumos = ins; state.config = cfg; state.recebimentos = rec;
 }
 
 /* ===================== app / navegação ===================== */
@@ -488,15 +494,16 @@ async function abrirApp(){
 $$(".nav a").forEach(a => a.onclick = () => irPara(a.dataset.nav));
 function irPara(nome){
   $$(".nav a").forEach(a => a.classList.toggle("ativo", a.dataset.nav === nome));
-  ["inicio","producao","cadastro"].forEach(v => $("#view-"+v).classList.add("hidden"));
+  ["inicio","producao","leite","cadastro"].forEach(v => $("#view-"+v).classList.add("hidden"));
   const v = $("#view-"+nome); v.classList.remove("hidden");
   // reinicia a animação
   v.style.animation = "none"; void v.offsetWidth; v.style.animation = "";
   if(nome === "inicio")   renderInicio();
   if(nome === "producao") renderProducao();
+  if(nome === "leite")    renderRecebimento();
   if(nome === "cadastro") renderCadastro();
   $("#fab").classList.toggle("hidden", nome === "cadastro");
-  $("#fab").onclick = nome === "cadastro" ? null : abrirModalLote;
+  $("#fab").onclick = nome === "leite" ? abrirModalRecebimento : (nome === "cadastro" ? null : abrirModalLote);
 }
 
 /* privacidade */
@@ -644,6 +651,106 @@ function renderProducao(){
   if(!state.lotes.length){ $("#view-producao").innerHTML = html + vazioLotes(); return; }
   html += state.lotes.map(l => cardLote(l, curaDoLote(l))).join("");
   $("#view-producao").innerHTML = html;
+}
+
+/* ===================== render: RECEBIMENTO DE LEITE ===================== */
+function nomeForn(id){ const f = state.fornecedores.find(x=>x.id===id); return f ? f.nome : "Fornecedor"; }
+function mesAtual(){ return hoje().slice(0,7); }
+
+// preço por litro conforme a quantidade (faixa) ou preço padrão
+function precoLitroPara(litros){
+  const l = Number(litros)||0;
+  const faixas = [...state.leiteFaixas].sort((a,b)=>(Number(a.litros_de)||0)-(Number(b.litros_de)||0));
+  const faixa = faixas.find(f => l >= (Number(f.litros_de)||0) && (f.litros_ate==null || l <= Number(f.litros_ate)));
+  if(faixa) return Number(faixa.preco)||0;
+  return Number(state.config.preco_leite_padrao)||0;
+}
+
+function renderRecebimento(){
+  const recs = state.recebimentos;
+  const doMes = recs.filter(r => (r.data||"").slice(0,7) === mesAtual());
+  const litrosMes = doMes.reduce((s,r)=> s + (Number(r.litros)||0), 0);
+  const valorMes  = doMes.reduce((s,r)=> s + (Number(r.valor_total)||0), 0);
+
+  let html = `
+    <div class="resumo">
+      <div class="stat g"><div class="n">${num(litrosMes)}</div><div class="l">litros no mês</div></div>
+      <div class="stat a"><div class="n" style="font-size:1.05rem">${brl(valorMes)}</div><div class="l">a pagar no mês</div></div>
+    </div>
+    <div class="rotulo">Recebimentos</div>`;
+
+  if(!recs.length){
+    html += vazioCad("Toque no <b>+</b> pra lançar uma entrega:<br>fornecedor, data e litros. O preço é calculado sozinho.");
+  } else {
+    html += recs.map(r => `
+      <div class="tipo" data-rec="${r.id}">
+        <div>
+          <div class="nome">${esc(nomeForn(r.fornecedor_id))}</div>
+          <div class="det">${dataBR(r.data)} · ${num(r.litros)} L × ${brl(r.preco_litro)}/L</div>
+        </div>
+        <div class="preco">${brl(r.valor_total)}</div>
+      </div>`).join("");
+  }
+  $("#view-leite").innerHTML = html;
+  $$("#view-leite [data-rec]").forEach(el => el.onclick = () => abrirModalRecebimento(el.dataset.rec));
+}
+
+function abrirModalRecebimento(id){
+  if(!state.fornecedores.length){
+    toast("Cadastre um fornecedor primeiro.");
+    irPara("cadastro"); cadAba = "fornecedores"; renderCadastro(); setTimeout(() => abrirModalFornecedor(), 250); return;
+  }
+  const r = state.recebimentos.find(x=>x.id===id) || {};
+  const opts = state.fornecedores.map(f=>`<option value="${f.id}" ${r.fornecedor_id===f.id?"selected":""}>${esc(f.nome)}</option>`).join("");
+  abrirFolha(`
+    <h2>${id?"Editar":"Novo"} recebimento</h2>
+    <div class="campo"><label>Fornecedor</label><select id="r-forn">${opts}</select></div>
+    <div class="linha-campos">
+      <div class="campo"><label>Data</label><input id="r-data" type="date" value="${r.data||hoje()}"></div>
+      <div class="campo"><label>Litros</label><input id="r-litros" type="number" inputmode="decimal" value="${r.litros??""}" placeholder="0"></div>
+    </div>
+    <div class="previa" id="r-previa"></div>
+    <div class="erro" id="r-erro"></div>
+    <button class="btn btn-primario" id="r-salvar">Salvar</button>
+    ${botaoExcluir(id?"r-excluir":"","Excluir recebimento")}`);
+  const previa = () => {
+    const litros = parseFloat($("#r-litros").value)||0;
+    const pl = precoLitroPara(litros);
+    $("#r-previa").innerHTML = litros>0
+      ? `Preço: <b>${brl(pl)}/L</b> — total <b>${brl(litros*pl)}</b>`
+      : "Informe os litros pra calcular o valor.";
+  };
+  $("#r-litros").oninput = previa;
+  previa();
+  $("#r-salvar").onclick = () => salvarRecebimento(id);
+  if(id) $("#r-excluir").onclick = () => excluirRecebimento(id);
+}
+async function salvarRecebimento(id){
+  const fornecedor_id = $("#r-forn").value;
+  const data = $("#r-data").value || hoje();
+  const litros = parseFloat($("#r-litros").value)||0;
+  if(!fornecedor_id){ $("#r-erro").textContent = "Escolha o fornecedor."; return; }
+  if(litros <= 0){ $("#r-erro").textContent = "Informe os litros."; return; }
+  const preco_litro = precoLitroPara(litros);
+  const dados = { fornecedor_id, data, litros, preco_litro, valor_total: Math.round(litros*preco_litro*100)/100 };
+  if(id){
+    const r = state.recebimentos.find(x=>x.id===id); const bak = {...r}; Object.assign(r, dados);
+    state.recebimentos.sort((a,b)=>String(b.data).localeCompare(String(a.data)));
+    fecharModal(); renderRecebimento(); toast("Recebimento atualizado.");
+    const { error } = await sb.from("recebimentos_leite").update(dados).eq("id", id);
+    if(error){ Object.assign(r, bak); renderRecebimento(); toast("Não deu pra salvar.", true); }
+  } else {
+    const novo = { id:uid(), familia_id:familiaId, ...dados };
+    state.recebimentos.unshift(novo); fecharModal(); renderRecebimento(); toast("Recebimento lançado.");
+    const { error } = await sb.from("recebimentos_leite").insert(novo);
+    if(error){ state.recebimentos = state.recebimentos.filter(x=>x.id!==novo.id); renderRecebimento(); toast("Não deu pra salvar.", true); }
+  }
+}
+async function excluirRecebimento(id){
+  const bak = state.recebimentos; state.recebimentos = state.recebimentos.filter(x=>x.id!==id);
+  fecharModal(); renderRecebimento(); toast("Recebimento excluído.");
+  const { error } = await sb.from("recebimentos_leite").delete().eq("id", id);
+  if(error){ state.recebimentos = bak; renderRecebimento(); toast("Não deu pra excluir.", true); }
 }
 
 /* ===================== render: CADASTRO ===================== */
