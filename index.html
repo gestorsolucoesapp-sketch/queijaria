@@ -313,7 +313,7 @@ input,select{font-family:inherit;font-size:16px}
    ======================================================================= */
 const SUPABASE_URL      = "https://cadnmgaymgljmoadebkk.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uBKKvD_e5ef4326TvkFgcg_rRnjmTus";
-const APP_VER = "v13";                              // suba junto com o cache do sw.js
+const APP_VER = "v14";                              // suba junto com o cache do sw.js
 
 /* ===================== estado ===================== */
 let sb = null;
@@ -888,6 +888,17 @@ function renderLeiteAPagar(corpo){
   const vencidos = recs.filter(r => diffDias(vencimentoDe(r)) <= 0);
   const valorVencido = vencidos.reduce((s,r)=> s + (Number(r.valor_total)||0), 0);
 
+  // agrupar por fornecedor + vencimento
+  const grupos = {};
+  recs.forEach(r => {
+    const venc = vencimentoDe(r);
+    const k = r.fornecedor_id + "|" + venc;
+    if(!grupos[k]) grupos[k] = { fid:r.fornecedor_id, venc, itens:[], litros:0, valor:0 };
+    grupos[k].itens.push(r);
+    grupos[k].litros += Number(r.litros)||0;
+    grupos[k].valor  += Number(r.valor_total)||0;
+  });
+
   let html = `
     <div class="resumo">
       <div class="stat g"><div class="n">${num(litrosMes)}</div><div class="l">litros no mês</div></div>
@@ -895,41 +906,72 @@ function renderLeiteAPagar(corpo){
     </div>
     <div class="rotulo">A pagar</div>`;
 
-  if(!recs.length){
+  const chaves = Object.keys(grupos).sort((a,b)=> grupos[a].venc.localeCompare(grupos[b].venc));
+  if(!chaves.length){
     html += vazioCad("Toque no <b>+</b> pra lançar uma entrega:<br>fornecedor, data e litros. O preço é calculado sozinho.");
   } else {
-    const ord = [...recs].sort((a,b)=> vencimentoDe(a).localeCompare(vencimentoDe(b)));
-    html += ord.map(r => {
-      const venc = vencimentoDe(r);
-      const dias = diffDias(venc);
+    html += chaves.map(k => {
+      const g = grupos[k];
+      const dias = diffDias(g.venc);
       const vencido = dias <= 0;
-      const quando = vencido ? (dias===0 ? "paga hoje" : `venceu ${dataBR(venc)}`) : `paga ${dataBR(venc)}`;
-      return `<div class="tipo ${vencido?"vencido":""}" data-rec="${r.id}">
+      const quando = vencido ? (dias===0 ? "paga hoje" : `venceu ${dataBR(g.venc)}`) : `paga ${dataBR(g.venc)}`;
+      const unico = g.itens.length === 1 ? g.itens[0] : null;
+      const det = unico
+        ? `${dataBR(unico.data)} · ${num(unico.litros)} L × ${brl(unico.preco_litro)}/L`
+        : `${g.itens.length} entregas · ${num(g.litros)} L`;
+      return `<div class="tipo ${vencido?"vencido":""}" data-grupo="${k}">
         <div>
-          <div class="nome"><span class="link-forn" data-fdet="${r.fornecedor_id}">${esc(nomeForn(r.fornecedor_id))}</span> <span class="pill-venc ${vencido?"on":""}">${quando}</span></div>
-          <div class="det">${dataBR(r.data)} · ${num(r.litros)} L × ${brl(r.preco_litro)}/L</div>
+          <div class="nome"><span class="link-forn" data-fdet="${g.fid}">${esc(nomeForn(g.fid))}</span> <span class="pill-venc ${vencido?"on":""}">${quando}</span></div>
+          <div class="det">${det}</div>
         </div>
         <div style="text-align:right">
-          <div class="preco">${brl(r.valor_total)}</div>
-          ${vencido?`<button class="btn-pago" data-pago="${r.id}">Pago</button>`:""}
+          <div class="preco">${brl(g.valor)}</div>
+          ${vencido?`<button class="btn-pago" data-pagogrupo="${k}">Pago</button>`:""}
         </div>
       </div>`;
     }).join("");
   }
   corpo.innerHTML = html;
-  $$("#leite-corpo [data-rec]").forEach(el => el.onclick = () => abrirModalRecebimento(el.dataset.rec));
-  $$("#leite-corpo [data-pago]").forEach(b => b.onclick = (e) => { e.stopPropagation(); marcarPago(b.dataset.pago); });
+  const G = grupos;
+  $$("#leite-corpo [data-grupo]").forEach(el => el.onclick = () => {
+    const g = G[el.dataset.grupo];
+    if(g.itens.length === 1) abrirModalRecebimento(g.itens[0].id);
+    else abrirGrupoRecebimentos(g);
+  });
+  $$("#leite-corpo [data-pagogrupo]").forEach(b => b.onclick = (e) => {
+    e.stopPropagation(); marcarPagoGrupo(G[b.dataset.pagogrupo].itens.map(r=>r.id));
+  });
   $$("#leite-corpo [data-fdet]").forEach(s => s.onclick = (e) => { e.stopPropagation(); abrirDetalheFornecedor(s.dataset.fdet); });
 }
 
-async function marcarPago(id){
-  const r = state.recebimentos.find(x=>x.id===id);
-  if(!r) return;
-  const bak = { pago:r.pago, pago_em:r.pago_em };
-  r.pago = true; r.pago_em = hoje();
-  renderRecebimento(); toast("Pago. Foi pro histórico.");
-  const { error } = await sb.from("recebimentos_leite").update({ pago:true, pago_em:r.pago_em }).eq("id", id);
-  if(error){ Object.assign(r, bak); renderRecebimento(); toast("Erro ao marcar pago: "+(error.message||"?"), true); }
+function abrirGrupoRecebimentos(g){
+  const linhas = [...g.itens].sort((a,b)=> String(b.data).localeCompare(String(a.data))).map(r => `
+    <div class="tipo" style="padding:10px 12px" data-editrec="${r.id}">
+      <div><div class="nome" style="font-size:.85rem">${dataBR(r.data)}</div>
+      <div class="det">${num(r.litros)} L × ${brl(r.preco_litro)}/L</div></div>
+      <div class="preco">${brl(r.valor_total)}</div>
+    </div>`).join("");
+  abrirFolha(`
+    <h2>${esc(nomeForn(g.fid))}</h2>
+    <p class="dica" style="margin-top:-6px">Pagamento ${dataBR(g.venc)} · ${g.itens.length} entregas · ${num(g.litros)} L — total <b>${brl(g.valor)}</b></p>
+    <div class="rotulo">Entregas deste pagamento</div>
+    <div style="max-height:44vh;overflow-y:auto">${linhas}</div>
+    <p class="dica">Toque numa entrega pra editar.</p>`);
+  $$("[data-editrec]").forEach(el => el.onclick = () => abrirModalRecebimento(el.dataset.editrec));
+}
+
+async function marcarPagoGrupo(ids){
+  const alvo = state.recebimentos.filter(r => ids.includes(r.id));
+  if(!alvo.length) return;
+  const bak = alvo.map(r => ({ id:r.id, pago:r.pago, pago_em:r.pago_em }));
+  const em = hoje();
+  alvo.forEach(r => { r.pago = true; r.pago_em = em; });
+  renderRecebimento(); toast(alvo.length === 1 ? "Pago. Foi pro histórico." : `${alvo.length} entregas pagas. Foram pro histórico.`);
+  const { error } = await sb.from("recebimentos_leite").update({ pago:true, pago_em:em }).in("id", ids);
+  if(error){
+    bak.forEach(b => { const r = state.recebimentos.find(x=>x.id===b.id); if(r){ r.pago=b.pago; r.pago_em=b.pago_em; } });
+    renderRecebimento(); toast("Erro ao marcar pago: "+(error.message||"?"), true);
+  }
 }
 
 function renderLeiteHistorico(corpo){
