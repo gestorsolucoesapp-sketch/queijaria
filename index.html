@@ -213,6 +213,15 @@ input,select{font-family:inherit;font-size:16px}
 @keyframes nomeSobe{from{opacity:0;translate:0 8px}to{opacity:1;translate:0 0}}
 @keyframes barraVai{0%{margin-left:-46%}100%{margin-left:102%}}
 .catalogo{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.alerta-cheque{display:flex;align-items:center;gap:12px;background:#fdeceb;border:1.5px solid var(--vermelho);border-radius:var(--r);padding:13px 15px;margin-bottom:14px;cursor:pointer;box-shadow:var(--sombra)}
+.alerta-cheque .ac-ic{font-size:1.5rem;flex:none}
+.alerta-cheque .ac-tit{font-weight:800;color:var(--vermelho);font-size:.95rem}
+.alerta-cheque .ac-sub{font-size:.8rem;color:var(--tinta-mole);margin-top:1px}
+.cheque-card{display:flex;align-items:center;gap:12px}
+.check-baixa{width:28px;height:28px;border-radius:9px;border:2px solid var(--linha-forte);background:var(--card);flex:none;cursor:pointer;display:grid;place-items:center;padding:0}
+.check-baixa.on{background:var(--verde);border-color:var(--verde)}
+.cheque-card.compensado-item{border:1.5px solid var(--verde);box-shadow:0 0 0 3px rgba(78,124,58,.08)}
+.preco.riscado{text-decoration:line-through;opacity:.5}
 .cat-card{background:var(--card);border:1px solid var(--linha);border-radius:var(--r);overflow:hidden;
   box-shadow:var(--sombra);cursor:pointer}
 .cat-card img{width:100%;aspect-ratio:1;object-fit:cover;display:block}
@@ -383,7 +392,7 @@ input,select{font-family:inherit;font-size:16px}
    ======================================================================= */
 const SUPABASE_URL      = "https://cadnmgaymgljmoadebkk.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uBKKvD_e5ef4326TvkFgcg_rRnjmTus";
-const APP_VER = "v37";
+const APP_VER = "v38";
 const SPLASH_MIN = 2400;
 const EMAIL_ADMIN = "jpferreira1356@icloud.com";
 const splashT0 = Date.now();                              // suba junto com o cache do sw.js
@@ -729,6 +738,19 @@ function renderInicio(){
       <div class="stat a"><div class="n">${ativos.length}</div><div class="l">lotes ativos</div></div>
     </div>`;
 
+  // alerta de cheques atrasados
+  const atrasados = state.cheques.filter(c => !c.compensado && diffDias(bomParaDe(c)) <= 0);
+  if(atrasados.length){
+    const totalAtr = atrasados.reduce((s,c)=> s + (Number(c.valor)||0), 0);
+    html += `<div class="alerta-cheque" id="alerta-cheque">
+      <div class="ac-ic">⚠️</div>
+      <div style="flex:1">
+        <div class="ac-tit">${atrasados.length===1?"1 cheque atrasado":atrasados.length+" cheques atrasados"}</div>
+        <div class="ac-sub">${brl(totalAtr)} venceu e ainda não deu baixa · toque pra ver</div>
+      </div>
+    </div>`;
+  }
+
   if(proximo){
     const { l, c } = proximo;
     html += `
@@ -764,6 +786,8 @@ function renderInicio(){
       .map(({l,c}) => cardLote(l,c)).join("");
   }
   $("#view-inicio").innerHTML = html;
+  const al = $("#alerta-cheque");
+  if(al) al.onclick = () => { leiteAba = "apagar"; irPara("cheques"); };
 }
 function statusPeso(s){ return {pronto:0,curando:1,vendido:2,descartado:3}[s] ?? 9; }
 
@@ -1677,19 +1701,20 @@ function renderCheques(corpo){
     const bom = bomParaDe(c);
     const dias = diffDias(bom);
     const vencido = !c.compensado && dias <= 0;
+    const cls = c.compensado ? "compensado-item" : (vencido ? "vencido" : "");
     const pill = c.compensado
       ? `<span class="pill-venc pago">compensado ${dataBR(c.compensado_em)}</span>`
-      : `<span class="pill-venc ${vencido?"on":""}">bom p/ ${dataBR(bom)}</span>`;
+      : `<span class="pill-venc ${vencido?"on":""}">${vencido?"ATRASADO · bom p/ ":"bom p/ "}${dataBR(bom)}</span>`;
     const numero = c.numero ? ` · nº ${esc(c.numero)}` : "";
-    return `<div class="tipo ${vencido?"vencido":""}" data-cheque="${c.id}">
-      <div>
+    return `<div class="tipo cheque-card ${cls}" data-cheque="${c.id}">
+      <button class="check-baixa ${c.compensado?"on":""}" data-baixa="${c.id}" title="${c.compensado?"Desfazer baixa":"Dar baixa (compensado)"}">
+        ${c.compensado?`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`:""}
+      </button>
+      <div style="flex:1">
         <div class="nome">${esc(c.para||"—")} ${pill}</div>
         <div class="det">preenchido ${dataBR(c.data)}${numero} · prazo ${prazoRot(c.prazo_dias)}</div>
       </div>
-      <div style="text-align:right">
-        <div class="preco">${brl(c.valor)}</div>
-        ${vencido?`<button class="btn-pago" data-compensar="${c.id}">Compensado</button>`:""}
-      </div>
+      <div class="preco ${c.compensado?"riscado":""}">${brl(c.valor)}</div>
     </div>`;
   };
 
@@ -1708,7 +1733,8 @@ function renderCheques(corpo){
     html += [...comp].sort((a,b)=> String(b.compensado_em||b.data).localeCompare(String(a.compensado_em||a.data))).map(cartao).join("");
   }
   corpo.innerHTML = html;
-  corpo.querySelectorAll("[data-cheque]").forEach(el => el.onclick = () => abrirModalCheque(el.dataset.cheque));
+  corpo.querySelectorAll("[data-cheque]").forEach(el => el.onclick = (e) => { if(e.target.closest("[data-baixa]")) return; abrirModalCheque(el.dataset.cheque); });
+  corpo.querySelectorAll("[data-baixa]").forEach(b => b.onclick = (e) => { e.stopPropagation(); alternarBaixaCheque(b.dataset.baixa); });
   corpo.querySelectorAll("[data-gdia]").forEach(r => r.onclick = () => abrirChequesDoDia(r.dataset.gdia));
   corpo.querySelectorAll("[data-compensar]").forEach(b => b.onclick = (e) => { e.stopPropagation(); marcarCompensado(b.dataset.compensar); });
 }
@@ -1759,6 +1785,16 @@ async function salvarCheque(id){
     const { error } = await sb.from("cheques").insert(novo);
     if(error){ state.cheques = state.cheques.filter(x=>x.id!==novo.id); refreshCheques(); toast("Erro ao salvar: "+(error.message||"?"), true); }
   }
+}
+async function alternarBaixaCheque(id){
+  const c = state.cheques.find(x=>x.id===id);
+  if(!c) return;
+  const bak = { compensado:c.compensado, compensado_em:c.compensado_em };
+  if(!c.compensado){ c.compensado = true; c.compensado_em = hoje(); toast("Baixa dada. Foi pros compensados."); }
+  else { c.compensado = false; c.compensado_em = null; toast("Baixa desfeita."); }
+  refreshCheques();
+  const { error } = await sb.from("cheques").update({ compensado:c.compensado, compensado_em:c.compensado_em }).eq("id", id);
+  if(error){ Object.assign(c, bak); refreshCheques(); toast("Erro: "+(error.message||"?"), true); }
 }
 async function marcarCompensado(id){
   const c = state.cheques.find(x=>x.id===id);
