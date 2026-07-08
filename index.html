@@ -190,6 +190,13 @@ input,select{font-family:inherit;font-size:16px}
   padding:14px 14px 8px;margin-bottom:12px;box-shadow:var(--sombra)}
 .graf-cab{margin-bottom:8px}
 .link-forn{text-decoration:underline dotted var(--ouro);text-underline-offset:3px;cursor:pointer}
+.ciclo-cab{display:flex;justify-content:space-between;align-items:center;background:var(--card);
+  border:1px solid var(--linha);border-radius:12px;padding:10px 12px;margin:12px 0 6px;box-shadow:var(--sombra)}
+.ponto{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;vertical-align:baseline}
+.seg-linha{display:flex;gap:6px;margin-bottom:14px}
+.seg-prazo{flex:1;padding:9px 4px;border-radius:10px;border:1px solid var(--linha);background:var(--card);
+  font-family:inherit;font-size:.78rem;font-weight:700;color:var(--tinta);opacity:.55;cursor:pointer}
+.seg-prazo.on{background:var(--ouro);border-color:var(--ouro);color:#fff;opacity:1}
 .btn-scan{background:var(--ouro);color:#fff;border:none;border-radius:11px;width:48px;display:grid;place-items:center;cursor:pointer;flex:none}
 .scan-overlay{position:fixed;inset:0;background:rgba(20,16,10,.82);z-index:200;display:grid;place-items:center;padding:18px}
 .scan-box{background:var(--card);border-radius:var(--r);padding:16px;width:100%;max-width:360px;text-align:center}
@@ -306,7 +313,7 @@ input,select{font-family:inherit;font-size:16px}
    ======================================================================= */
 const SUPABASE_URL      = "https://cadnmgaymgljmoadebkk.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uBKKvD_e5ef4326TvkFgcg_rRnjmTus";
-const APP_VER = "v12";                              // suba junto com o cache do sw.js
+const APP_VER = "v13";                              // suba junto com o cache do sw.js
 
 /* ===================== estado ===================== */
 let sb = null;
@@ -772,48 +779,90 @@ function precoLitroPara(litros){
   return Number(state.config.preco_leite_padrao)||0;
 }
 
+const CORES_CICLO = ["#D99A2B","#4A6FA5","#4E7C3A","#C0392B","#8E5FA8","#C77B3F"];
+function diasEntre(a,b){ return Math.round((Date.parse(b)-Date.parse(a))/864e5); }
+
 function abrirDetalheFornecedor(fid){
   const f = state.fornecedores.find(x=>x.id===fid);
   if(!f) return;
   const recs = state.recebimentos.filter(r => r.fornecedor_id === fid);
   if(!recs.length){ toast("Sem recebimentos desse fornecedor."); return; }
 
-  // agrupar por dia
-  const porDia = {};
-  recs.forEach(r => {
-    const d = r.data;
-    if(!porDia[d]) porDia[d] = { litros:0, valor:0, pagos:0, qtd:0 };
-    porDia[d].litros += Number(r.litros)||0;
-    porDia[d].valor  += Number(r.valor_total)||0;
-    porDia[d].qtd++; if(r.pago) porDia[d].pagos++;
-  });
-  const diasComDados = Object.keys(porDia).sort().reverse();
+  const prazo = Number(f.prazo_pagamento)||30;
+  const ancora = recs.map(r=>r.data).sort()[0]; // primeira entrega = início do 1º ciclo
+  const cicloDe = d => Math.max(0, Math.floor(diasEntre(ancora, d) / prazo));
 
-  // gráfico: últimos 14 dias
+  // agrupar por ciclo e por dia
+  const ciclos = {};
+  recs.forEach(r => {
+    const c = cicloDe(r.data);
+    if(!ciclos[c]) ciclos[c] = { dias:{}, litros:0, valor:0 };
+    const cd = ciclos[c];
+    if(!cd.dias[r.data]) cd.dias[r.data] = { litros:0, valor:0, qtd:0, pagos:0 };
+    cd.dias[r.data].litros += Number(r.litros)||0;
+    cd.dias[r.data].valor  += Number(r.valor_total)||0;
+    cd.dias[r.data].qtd++; if(r.pago) cd.dias[r.data].pagos++;
+    cd.litros += Number(r.litros)||0;
+    cd.valor  += Number(r.valor_total)||0;
+  });
+
+  // gráfico: últimos 14 dias, barra colorida pelo ciclo do dia
   const DIAS = 14;
   const dias = []; for(let i=DIAS-1;i>=0;i--) dias.push(addDias(hoje(),-i));
-  const valores = dias.map(d => porDia[d] ? porDia[d].litros : 0);
+  const porDiaTotal = {};
+  recs.forEach(r => { porDiaTotal[r.data] = (porDiaTotal[r.data]||0) + (Number(r.litros)||0); });
+  const valores = dias.map(d => porDiaTotal[d] || 0);
+  const cores = dias.map(d => diasEntre(ancora,d) < 0 ? "var(--linha)" : CORES_CICLO[cicloDe(d) % CORES_CICLO.length]);
 
   const totLitros = recs.reduce((s,r)=> s+(Number(r.litros)||0),0);
   const totValor  = recs.reduce((s,r)=> s+(Number(r.valor_total)||0),0);
 
-  const lista = diasComDados.map(d => {
-    const x = porDia[d];
-    const st = x.pagos === x.qtd ? `<span class="pill-venc pago">pago</span>` : "";
-    return `<div class="tipo" style="padding:10px 12px">
-      <div><div class="nome" style="font-size:.86rem">${dataBR(d)} ${st}</div>
-      <div class="det">${num(x.litros)} L${x.qtd>1?` · ${x.qtd} entregas`:""}</div></div>
-      <div class="preco">${brl(x.valor)}</div>
-    </div>`;
+  // blocos de ciclo (mais recente primeiro)
+  const blocos = Object.keys(ciclos).map(Number).sort((a,b)=>b-a).map(c => {
+    const ini = addDias(ancora, c*prazo);
+    const fim = addDias(ancora, (c+1)*prazo - 1);
+    const fechado = hoje() > fim;
+    const cor = CORES_CICLO[c % CORES_CICLO.length];
+    const cd = ciclos[c];
+    const linhas = Object.keys(cd.dias).sort().reverse().map(d => {
+      const x = cd.dias[d];
+      const st = x.pagos === x.qtd ? `<span class="pill-venc pago">pago</span>` : "";
+      return `<div class="tipo" style="padding:9px 12px;border-left:4px solid ${cor}">
+        <div><div class="nome" style="font-size:.85rem">${dataBR(d)} ${st}</div>
+        <div class="det">${num(x.litros)} L${x.qtd>1?` · ${x.qtd} entregas`:""}</div></div>
+        <div class="preco">${brl(x.valor)}</div>
+      </div>`;
+    }).join("");
+    return `<div class="ciclo-cab" style="border-left:4px solid ${cor}">
+      <div>
+        <div class="nome" style="font-size:.83rem"><span class="ponto" style="background:${cor}"></span>Ciclo ${dataBR(ini)} – ${dataBR(fim)}</div>
+        <div class="det">${num(cd.litros)} L · ${fechado ? "fechado — valor congelado" : "em aberto até "+dataBR(fim)}</div>
+      </div>
+      <div class="preco" style="${fechado?"":"opacity:.55"}">${brl(cd.valor)}</div>
+    </div>${linhas}`;
   }).join("");
+
+  const segPrazo = [1,7,15,30].map(p =>
+    `<button class="seg-prazo ${p===prazo?"on":""}" data-prazo="${p}">${p===1?"1 dia":p+" dias"}</button>`).join("");
 
   abrirFolha(`
     <h2>${esc(f.nome)}</h2>
-    <p class="dica" style="margin-top:-6px">${num(totLitros)} L no total · ${brl(totValor)} · paga em ${prazoRot(f.prazo_pagamento)}</p>
-    <div class="rotulo">Litros por dia · últimos ${DIAS} dias</div>
-    <div class="graf-card" style="margin-bottom:14px">${barrasSVG(valores, dias)}</div>
-    <div class="rotulo">Valores diários</div>
-    <div style="max-height:38vh;overflow-y:auto">${lista}</div>`);
+    <p class="dica" style="margin-top:-6px">${num(totLitros)} L no total · ${brl(totValor)}</p>
+    <div class="rotulo">Período de pagamento</div>
+    <div class="seg-linha">${segPrazo}</div>
+    <div class="rotulo">Litros por dia · cor = ciclo</div>
+    <div class="graf-card" style="margin-bottom:14px">${barrasSVG(valores, dias, cores)}</div>
+    <div class="rotulo">Ciclos</div>
+    <div style="max-height:34vh;overflow-y:auto">${blocos}</div>`);
+
+  $$(".seg-prazo").forEach(b => b.onclick = async () => {
+    const novo = parseInt(b.dataset.prazo);
+    if(novo === prazo) return;
+    const bak = f.prazo_pagamento; f.prazo_pagamento = novo;
+    abrirDetalheFornecedor(fid); toast(`Período: ${novo===1?"1 dia":novo+" dias"}.`);
+    const { error } = await sb.from("fornecedores").update({ prazo_pagamento: novo }).eq("id", fid);
+    if(error){ f.prazo_pagamento = bak; abrirDetalheFornecedor(fid); toast("Erro ao mudar o período: "+(error.message||"?"), true); }
+  });
 }
 
 function renderRecebimento(){
@@ -936,7 +985,7 @@ function renderLeiteGraficos(corpo){
   corpo.innerHTML = html;
 }
 
-function barrasSVG(valores, dias){
+function barrasSVG(valores, dias, cores){
   const W=320, H=110, PAD=4, GAP=3;
   const n = valores.length;
   const bw = (W - PAD*2 - GAP*(n-1)) / n;
@@ -945,7 +994,7 @@ function barrasSVG(valores, dias){
     const h = v>0 ? Math.max(3, (v/max)*(H-34)) : 2;
     const x = PAD + i*(bw+GAP);
     const y = H-22-h;
-    const cor = v>0 ? "var(--ouro)" : "var(--linha)";
+    const cor = v>0 ? ((cores && cores[i]) || "var(--ouro)") : "var(--linha)";
     const rot = v>0 && bw>14 ? `<text x="${x+bw/2}" y="${y-4}" text-anchor="middle" font-size="8" fill="#8a7f68" font-family="'IBM Plex Mono',monospace">${Math.round(v)}</text>` : "";
     return `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${bw.toFixed(1)}" height="${h.toFixed(1)}" rx="2" fill="${cor}"/>${rot}`;
   }).join("");
