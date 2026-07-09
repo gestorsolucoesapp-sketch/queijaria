@@ -177,6 +177,25 @@ input,select{font-family:inherit;font-size:16px}
 .subnav a.ativo{background:var(--ouro);color:#fff;opacity:1}
 .tipo .ver{color:var(--tinta-mole);font-size:1.4rem;line-height:1;padding-left:8px}
 .fila-badge{font-size:.6rem;font-weight:700;color:#fff;background:var(--azul);padding:2px 7px;border-radius:20px;margin-left:5px;white-space:nowrap}
+.ia-msgs{max-height:52vh;overflow-y:auto;display:flex;flex-direction:column;gap:8px;padding:4px 2px;margin:6px 0}
+.ia-bolha{max-width:85%;padding:10px 13px;border-radius:15px;font-size:.9rem;line-height:1.4;word-wrap:break-word}
+.ia-eu{align-self:flex-end;background:var(--ouro);color:#3a2c10;border-bottom-right-radius:5px}
+.ia-bot{align-self:flex-start;background:var(--card);border:1px solid var(--linha);color:var(--tinta);border-bottom-left-radius:5px}
+.ia-pensando{display:flex;gap:4px;align-items:center}
+.ia-pensando span{width:7px;height:7px;border-radius:50%;background:var(--tinta-mole);opacity:.4;animation:iablink 1.2s infinite}
+.ia-pensando span:nth-child(2){animation-delay:.2s}.ia-pensando span:nth-child(3){animation-delay:.4s}
+@keyframes iablink{0%,60%,100%{opacity:.3}30%{opacity:.9}}
+.ia-vazio{text-align:center;padding:12px 6px;color:var(--tinta-mole)}
+.ia-vazio-ic{font-size:2rem;margin-bottom:6px}
+.ia-vazio p{font-size:.9rem;line-height:1.5;margin:0 0 12px}
+.ia-sugestoes{display:flex;flex-direction:column;gap:7px}
+.ia-sug{background:var(--card);border:1px solid var(--linha);border-radius:11px;padding:10px 12px;font-size:.85rem;color:var(--tinta);text-align:left;cursor:pointer}
+.ia-sug:active{opacity:.6}
+.ia-entrada{display:flex;gap:8px;align-items:flex-end;margin-top:8px}
+.ia-entrada textarea{flex:1;resize:none;border:1px solid var(--linha);border-radius:13px;padding:11px 13px;font-size:.9rem;font-family:inherit;background:var(--card);color:var(--tinta);max-height:120px}
+.ia-enviar{width:44px;height:44px;flex:none;border-radius:12px;background:var(--ouro);color:#3a2c10;display:grid;place-items:center;cursor:pointer;border:none}
+.ia-enviar:disabled{opacity:.5}
+.ia-rodape{text-align:center;font-size:.72rem;color:var(--tinta-mole);margin-top:8px;min-height:14px}
 .verbadge{font-size:.62rem;font-weight:700;color:var(--tinta-mole);background:var(--linha);
   padding:2px 6px;border-radius:20px;margin-left:6px;letter-spacing:.5px;vertical-align:middle}
 .tipo.vencido{border:1.5px solid var(--vermelho);box-shadow:0 0 0 3px rgba(192,57,43,.08)}
@@ -230,7 +249,7 @@ body.leitura .btn-pago,
 body.leitura .btn-desc,
 body.leitura .check-baixa,
 body.leitura .btn-scan,
-body.leitura #btn-config{ display:none !important; }
+body.leitura #btn-config, body.leitura #btn-ia{ display:none !important; }
 body.leitura .cheque-card{ pointer-events:none }
 body.leitura .cheque-card .nome, body.leitura .cheque-card .det, body.leitura .cheque-card .preco{ pointer-events:auto }
 .cfg-aba{display:flex;align-items:center;gap:10px;padding:9px 4px;font-weight:600;border-bottom:1px solid var(--linha)}
@@ -372,6 +391,9 @@ body.leitura .fab-ia{display:grid}
       <span id="fila-badge" class="fila-badge" style="display:none"></span>
     </div>
     <div class="topo-acoes">
+      <button class="icone-btn" id="btn-ia" title="Analista de IA">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a2 2 0 0 1 2 2c0 .74-.4 1.39-1 1.73V7h1a7 7 0 0 1 7 7h1a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-1v1a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-1H3a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1h1a7 7 0 0 1 7-7h1V5.73c-.6-.34-1-.99-1-1.73a2 2 0 0 1 2-2z"/><circle cx="8.5" cy="14.5" r="1.5" fill="currentColor"/><circle cx="15.5" cy="14.5" r="1.5" fill="currentColor"/></svg>
+      </button>
       <button class="icone-btn" id="btn-config" title="Configurações">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.09a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.09a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
       </button>
@@ -438,7 +460,7 @@ body.leitura .fab-ia{display:grid}
    ======================================================================= */
 const SUPABASE_URL      = "https://cadnmgaymgljmoadebkk.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uBKKvD_e5ef4326TvkFgcg_rRnjmTus";
-const APP_VER = "v66";
+const APP_VER = "v67";
 const SPLASH_MIN = 2400;
 const EMAIL_ADMIN = "jpferreira1356@icloud.com";
 const splashT0 = Date.now();                              // suba junto com o cache do sw.js
@@ -735,6 +757,81 @@ function traduzErro(m=""){
 
 $("#btn-sair").onclick = async () => { await sb.auth.signOut(); location.reload(); };
 $("#btn-config").onclick = () => abrirModalConfig();
+$("#btn-ia").onclick = () => abrirChatIA();
+
+// ===================== ANALISTA DE IA =====================
+let iaHistorico = [];
+function abrirChatIA(){
+  const bolhas = iaHistorico.length ? iaHistorico.map(m => bolhaIA(m.role, m.content)).join("") :
+    `<div class="ia-vazio">
+       <div class="ia-vazio-ic">🧀🤖</div>
+       <p>Sou o analista da Queijaria. Pergunte sobre <b>custos, margens, fornecedores, cheques e fluxo de caixa</b>.</p>
+       <div class="ia-sugestoes">
+         <button class="ia-sug">Como está meu caixa esse mês?</button>
+         <button class="ia-sug">Qual fornecedor me traz mais litros?</button>
+         <button class="ia-sug">Quanto tenho de cheque pra cair?</button>
+         <button class="ia-sug">Vale a pena aumentar a produção?</button>
+       </div>
+     </div>`;
+  abrirFolha(`
+    <h2>Analista de IA</h2>
+    <div id="ia-msgs" class="ia-msgs">${bolhas}</div>
+    <div class="ia-entrada">
+      <textarea id="ia-pergunta" rows="1" placeholder="Pergunte sobre o negócio…"></textarea>
+      <button id="ia-enviar" class="ia-enviar" title="Enviar">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+      </button>
+    </div>
+    <div class="ia-rodape" id="ia-rodape"></div>`);
+  const ta = $("#ia-pergunta");
+  ta.oninput = () => { ta.style.height = "auto"; ta.style.height = Math.min(120, ta.scrollHeight) + "px"; };
+  $("#ia-enviar").onclick = enviarIA;
+  ta.onkeydown = (e) => { if(e.key === "Enter" && !e.shiftKey){ e.preventDefault(); enviarIA(); } };
+  $$(".ia-sug").forEach(b => b.onclick = () => { $("#ia-pergunta").value = b.textContent; enviarIA(); });
+  const box = $("#ia-msgs"); box.scrollTop = box.scrollHeight;
+}
+function bolhaIA(role, texto){
+  const cls = role === "assistant" ? "ia-bolha ia-bot" : "ia-bolha ia-eu";
+  return `<div class="${cls}">${esc(texto).replace(/\n/g,"<br>")}</div>`;
+}
+async function enviarIA(){
+  const ta = $("#ia-pergunta"); const pergunta = (ta.value||"").trim();
+  if(!pergunta) return;
+  const box = $("#ia-msgs");
+  const vazio = box.querySelector(".ia-vazio"); if(vazio) vazio.remove();
+  box.insertAdjacentHTML("beforeend", bolhaIA("user", pergunta));
+  iaHistorico.push({ role:"user", content:pergunta });
+  ta.value = ""; ta.style.height = "auto";
+  box.insertAdjacentHTML("beforeend", `<div class="ia-bolha ia-bot ia-pensando" id="ia-pensando"><span></span><span></span><span></span></div>`);
+  box.scrollTop = box.scrollHeight;
+  $("#ia-enviar").disabled = true;
+  try{
+    const { data: { session } } = await sb.auth.getSession();
+    const r = await fetch(SUPABASE_URL + "/functions/v1/ai-chat", {
+      method:"POST",
+      headers:{ "content-type":"application/json", "Authorization":"Bearer " + (session?.access_token||"") },
+      body: JSON.stringify({ pergunta, historico: iaHistorico.slice(0,-1) })
+    });
+    const data = await r.json().catch(()=>({}));
+    $("#ia-pensando")?.remove();
+    if(!r.ok || data.error){
+      let msg = "Não consegui responder agora.";
+      if(data.error === "limite") msg = "Vocês já usaram as 40 perguntas de hoje. Volte amanhã. 🌙";
+      else if(data.error === "sem_chave") msg = "A chave da IA ainda não foi configurada no Supabase.";
+      else if(data.error === "ia_falhou" || data.error === "erro") msg = "A IA está indisponível no momento. Tente de novo em instantes.";
+      box.insertAdjacentHTML("beforeend", bolhaIA("assistant", msg));
+    } else {
+      box.insertAdjacentHTML("beforeend", bolhaIA("assistant", data.resposta || "…"));
+      iaHistorico.push({ role:"assistant", content:data.resposta||"" });
+      if(typeof data.restam === "number") $("#ia-rodape").textContent = `${data.restam} perguntas restantes hoje`;
+    }
+  }catch(e){
+    $("#ia-pensando")?.remove();
+    box.insertAdjacentHTML("beforeend", bolhaIA("assistant", "Sem conexão agora. Verifique a internet e tente de novo."));
+  }
+  $("#ia-enviar").disabled = false;
+  box.scrollTop = box.scrollHeight;
+}
 
 /* ===================== família ===================== */
 async function aposLogin(){
