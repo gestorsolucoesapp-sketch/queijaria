@@ -259,8 +259,6 @@ body.leitura .cheque-card .nome, body.leitura .cheque-card .det, body.leitura .c
 .cfg-aba{display:flex;align-items:center;gap:10px;padding:9px 4px;font-weight:600;border-bottom:1px solid var(--linha)}
 .cfg-aba input{width:20px;height:20px;accent-color:var(--ouro)}
 .icone-btn.leitura-on{ color:var(--vermelho) }
-.fab-ia{position:fixed;right:16px;bottom:150px;width:52px;height:52px;border-radius:50%;background:#F2C14E;color:#5a4a1a;border:none;display:grid;place-items:center;box-shadow:0 6px 20px rgba(0,0,0,.25);cursor:pointer;z-index:40}
-body.leitura .fab-ia{display:grid}
 .ia-msgs{background:var(--fundo);border:1px solid var(--linha);border-radius:12px;padding:10px;height:44vh;overflow-y:auto;display:flex;flex-direction:column;gap:8px;margin-bottom:10px}
 .ia-vazio{color:var(--tinta-mole);font-size:.88rem;text-align:center;margin:auto;padding:20px}
 .ia-msg{max-width:85%;padding:9px 12px;border-radius:14px;font-size:.9rem;line-height:1.4;white-space:pre-wrap;word-break:break-word}
@@ -432,9 +430,6 @@ body.leitura .fab-ia{display:grid}
     <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
   </button>
 
-  <button class="fab-ia" id="fab-ia" title="Assistente">
-    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 19v-4l12-9 8 5v8z"/><path d="M2 15h20"/><circle cx="7" cy="17" r="1"/><circle cx="12.5" cy="17" r="1"/><circle cx="17.5" cy="14.5" r="1"/></svg>
-  </button>
 
   <nav class="nav">
     <a data-nav="inicio" class="ativo">
@@ -474,7 +469,7 @@ body.leitura .fab-ia{display:grid}
    ======================================================================= */
 const SUPABASE_URL      = "https://cadnmgaymgljmoadebkk.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uBKKvD_e5ef4326TvkFgcg_rRnjmTus";
-const APP_VER = "v69";
+const APP_VER = "v70";
 const SPLASH_MIN = 2400;
 const EMAIL_ADMIN = "jpferreira1356@icloud.com";
 const splashT0 = Date.now();                              // suba junto com o cache do sw.js
@@ -992,7 +987,6 @@ async function abrirApp(){
   irPara("inicio");
   aplicarAbas();
   atualizarIndicadorFila(); processarFila();
-  $("#fab-ia").onclick = abrirChatIA;
   iniciarRealtime();
 }
 
