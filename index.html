@@ -416,7 +416,7 @@ body.leitura .cheque-card .nome, body.leitura .cheque-card .det, body.leitura .c
    ======================================================================= */
 const SUPABASE_URL      = "https://cadnmgaymgljmoadebkk.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uBKKvD_e5ef4326TvkFgcg_rRnjmTus";
-const APP_VER = "v57";
+const APP_VER = "v58";
 const SPLASH_MIN = 2400;
 const EMAIL_ADMIN = "jpferreira1356@icloud.com";
 const splashT0 = Date.now();                              // suba junto com o cache do sw.js
@@ -453,7 +453,11 @@ const state = { tipos: [], lotes: [], fornecedores: [], leiteFaixas: [], insumos
 /* ===================== utilidades ===================== */
 const $  = (s, r=document) => r.querySelector(s);
 const $$ = (s, r=document) => Array.from(r.querySelectorAll(s));
-const hoje = () => new Date().toISOString().slice(0,10);
+function fmtLocal(d){
+  const y=d.getFullYear(), m=String(d.getMonth()+1).padStart(2,"0"), dd=String(d.getDate()).padStart(2,"0");
+  return `${y}-${m}-${dd}`;
+}
+const hoje = () => fmtLocal(new Date());
 const uid  = () => (crypto.randomUUID ? crypto.randomUUID()
   : "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g,c=>{const r=Math.random()*16|0;return (c==="x"?r:(r&0x3|0x8)).toString(16);}));
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
@@ -464,7 +468,7 @@ function diffDias(ate){ // dias de hoje até 'ate' (AAAA-MM-DD); pode ser negati
 }
 function addDias(data, n){
   const d = new Date(data+"T00:00:00"); d.setDate(d.getDate()+n);
-  return d.toISOString().slice(0,10);
+  return fmtLocal(d);
 }
 function dataBR(iso){ if(!iso) return "—"; const [a,m,d]=iso.split("-"); return `${d}/${m}/${a}`; }
 
