@@ -183,6 +183,15 @@ body.leitura .fab-ia{display:none !important}
 .subnav a.ativo{background:var(--ouro);color:#fff;opacity:1}
 .tipo .ver{color:var(--tinta-mole);font-size:1.4rem;line-height:1;padding-left:8px}
 .fila-badge{font-size:.6rem;font-weight:700;color:#fff;background:var(--azul);padding:2px 7px;border-radius:20px;margin-left:5px;white-space:nowrap}
+.rec-linha{display:grid;grid-template-columns:1fr 62px auto auto 26px;gap:6px;align-items:center;margin-bottom:6px}
+.rec-linha select{padding:8px;border:1px solid var(--linha);border-radius:9px;font-size:.82rem;background:var(--card);color:var(--tinta);min-width:0}
+.rec-linha input{padding:8px;border:1px solid var(--linha);border-radius:9px;font-size:.82rem;background:var(--card);color:var(--tinta);width:100%;text-align:right}
+.rec-un{font-size:.72rem;color:var(--tinta-mole)}
+.rec-custo{font-size:.78rem;font-weight:700;color:var(--ouro-esc);font-family:'IBM Plex Mono',monospace;white-space:nowrap}
+.rec-x{width:24px;height:24px;border-radius:7px;border:none;background:var(--linha);color:var(--vermelho);font-size:.8rem;cursor:pointer}
+.custo-box{margin-top:10px;background:var(--card);border:1px solid var(--linha);border-radius:12px;padding:10px 13px}
+.custo-linha{display:flex;justify-content:space-between;align-items:center;font-size:.85rem;padding:3px 0}
+.custo-linha span{color:var(--tinta-mole)}
 .btn-queijo{display:inline-flex;align-items:center;gap:3px;margin-left:7px;padding:3px 9px 3px 4px;border:1px solid #e6cf8f;background:linear-gradient(#fff9e8,#fdf1d0);border-radius:20px;cursor:pointer;box-shadow:0 1px 3px rgba(180,140,30,.18)}
 .btn-queijo:active{transform:none;opacity:.75}
 .btn-queijo-x{font-size:.7rem;font-weight:800;color:#b8891f;letter-spacing:.5px}
@@ -487,7 +496,7 @@ body.leitura .cheque-card .nome, body.leitura .cheque-card .det, body.leitura .c
    ======================================================================= */
 const SUPABASE_URL      = "https://cadnmgaymgljmoadebkk.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uBKKvD_e5ef4326TvkFgcg_rRnjmTus";
-const APP_VER = "v72";
+const APP_VER = "v73";
 const SPLASH_MIN = 2400;
 const EMAIL_ADMIN = "jpferreira1356@icloud.com";
 const splashT0 = Date.now();                              // suba junto com o cache do sw.js
@@ -519,7 +528,7 @@ function setLeitura(v){
   try { localStorage.setItem("modo_leitura", v ? "1" : "0"); } catch(e){}
   aplicarLeitura();
 }
-const state = { tipos: [], lotes: [], fornecedores: [], leiteFaixas: [], insumos: [], fornInsumos: [], config: {}, recebimentos: [], vendas: [], cheques: [], descontos: [] };
+const state = { tipos: [], lotes: [], fornecedores: [], leiteFaixas: [], insumos: [], fornInsumos: [], receitas: [], config: {}, recebimentos: [], vendas: [], cheques: [], descontos: [] };
 
 /* ===================== utilidades ===================== */
 const $  = (s, r=document) => r.querySelector(s);
@@ -976,13 +985,14 @@ function carregarCacheEstado(){ try { const s = JSON.parse(localStorage.getItem(
 async function carregarTudo(){
   if(!navigator.onLine){ carregarCacheEstado(); return; }
   const q = (p) => p.then(r => r.data || []).catch(() => []);
-  const [t, l, f, lf, ins, finsu, rec, vds, chq, dsc] = await Promise.all([
+  const [t, l, f, lf, ins, finsu, receitas, rec, vds, chq, dsc] = await Promise.all([
     q(sb.from("tipos_queijo").select("*").eq("familia_id", familiaId).order("nome")),
     q(sb.from("lotes").select("*").eq("familia_id", familiaId).order("data_fabricacao", { ascending:false })),
     q(sb.from("fornecedores").select("*").eq("familia_id", familiaId).order("nome")),
     q(sb.from("leite_faixas").select("*").eq("familia_id", familiaId).order("litros_de")),
     q(sb.from("insumos").select("*").eq("familia_id", familiaId).order("nome")),
     q(sb.from("fornecedores_insumo").select("*").eq("familia_id", familiaId).order("nome")),
+    q(sb.from("receita_insumos").select("*").eq("familia_id", familiaId)),
     q(sb.from("recebimentos_leite").select("*").eq("familia_id", familiaId).order("data", { ascending:false })),
     q(sb.from("vendas").select("*").eq("familia_id", familiaId).order("data", { ascending:false })),
     q(sb.from("cheques").select("*").eq("familia_id", familiaId).order("data", { ascending:false })),
@@ -990,7 +1000,7 @@ async function carregarTudo(){
   ]);
   let cfg = {};
   try { const r = await sb.from("queijaria_config").select("*").eq("familia_id", familiaId).maybeSingle(); cfg = r.data || {}; } catch(e){}
-  state.tipos = t; state.lotes = l; state.fornecedores = f; state.leiteFaixas = lf; state.insumos = ins; state.fornInsumos = finsu; state.config = cfg; state.recebimentos = rec; state.vendas = vds; state.cheques = chq; state.descontos = dsc;
+  state.tipos = t; state.lotes = l; state.fornecedores = f; state.leiteFaixas = lf; state.insumos = ins; state.fornInsumos = finsu; state.receitas = receitas; state.config = cfg; state.recebimentos = rec; state.vendas = vds; state.cheques = chq; state.descontos = dsc;
   salvarCacheEstado();
 }
 
@@ -1014,7 +1024,7 @@ async function abrirApp(){
 let realtimeCanal = null, realtimeTimer = null;
 function iniciarRealtime(){
   if(realtimeCanal) return;
-  const tabelas = ["recebimentos_leite","vendas","cheques","tipos_queijo","fornecedores","fornecedores_insumo","insumos","leite_faixas","lotes","queijaria_config"];
+  const tabelas = ["recebimentos_leite","vendas","cheques","tipos_queijo","fornecedores","fornecedores_insumo","insumos","leite_faixas","lotes","queijaria_config","receita_insumos"];
   realtimeCanal = sb.channel("queijaria-" + familiaId);
   tabelas.forEach(t => realtimeCanal.on("postgres_changes",
     { event: "*", schema: "public", table: t, filter: "familia_id=eq." + familiaId },
@@ -1082,6 +1092,27 @@ function anelSVG(pct, cor){
   </svg>`;
 }
 function nomeTipo(id){ const t = state.tipos.find(x=>x.id===id); return t ? t.nome : "Sem tipo"; }
+
+// custo unitário de 1 unidade base do insumo (ex.: R$/g, R$/ml, R$/un)
+function custoUnitInsumo(ins){
+  if(!ins) return 0;
+  const preco = Number(ins.preco)||0;
+  const qtd = Number(ins.quantidade)||0;
+  if(qtd > 0) return preco / qtd;   // preço do pacote ÷ quanto vem no pacote
+  return preco;                     // sem quantidade: assume que o preço já é por unidade
+}
+// receita de um queijo → lista de { insumo, qtd, custo }
+function receitaDoQueijo(tipoId){
+  return (state.receitas||[]).filter(r => r.tipo_queijo_id === tipoId).map(r => {
+    const ins = (state.insumos||[]).find(i => i.id === r.insumo_id);
+    const qtd = Number(r.quantidade)||0;
+    return { linha:r, insumo:ins, qtd, custo: qtd * custoUnitInsumo(ins) };
+  });
+}
+// custo de insumos por peça de um queijo
+function custoInsumosPeca(tipoId){
+  return receitaDoQueijo(tipoId).reduce((s,x)=> s + (x.custo||0), 0);
+}
 
 function renderInicio(){
   salvarCacheEstado();
@@ -1407,7 +1438,7 @@ async function comecarDoZero(){
     $("#cfg-zerar").disabled = false; $("#cfg-zerar").textContent = "Começar do zero"; return;
   }
   $("#cfg-zerar").textContent = "Apagando…";
-  const tabelas = ["recebimentos_leite","cheques","vendas","lotes","insumos","leite_faixas","fornecedores","fornecedores_insumo","tipos_queijo","queijaria_config"];
+  const tabelas = ["recebimentos_leite","cheques","vendas","lotes","insumos","leite_faixas","fornecedores","fornecedores_insumo","tipos_queijo","queijaria_config","receita_insumos"];
   const erros = [];
   for(const t of tabelas){
     try{ const { error } = await sb.from(t).delete().eq("familia_id", familiaId); if(error) erros.push(t); }
@@ -2681,8 +2712,20 @@ function renderQueijos(corpo){
       const precos = [t.preco_kg?`${brl(t.preco_kg)}/kg`:"", t.preco_peca?`${brl(t.preco_peca)}/pç`:""].filter(Boolean).join(" · ") || brl(t.preco_venda);
       const rend = t.litros_por_kg ? ` · ${num(t.litros_por_kg,1)} L/kg` : "";
       const fo = t.foto_url ? `<img src="${t.foto_url}" style="width:42px;height:42px;border-radius:9px;object-fit:cover;flex:none;margin-right:10px">` : "";
+      const custo = custoInsumosPeca(t.id);
+      let selo = "";
+      if(custo > 0){
+        const pv = Number(t.preco_peca)||0;
+        if(pv > 0){
+          const lucro = pv - custo; const mg = pv>0?(lucro/pv*100):0;
+          const cor = lucro>=0 ? "var(--verde)" : "var(--vermelho)";
+          selo = `<div class="det" style="color:${cor};font-weight:700">custo ${brl(custo)}/pç · margem ${mg.toFixed(0)}%</div>`;
+        } else {
+          selo = `<div class="det">custo ${brl(custo)}/pç</div>`;
+        }
+      }
       return `<div class="tipo" data-queijo="${t.id}" style="align-items:center">
-        ${fo}<div style="flex:1"><div class="nome">${esc(t.nome)}</div><div class="det">${Number(t.dias_cura)||0} dias de cura${rend}</div></div>
+        ${fo}<div style="flex:1"><div class="nome">${esc(t.nome)}</div><div class="det">${Number(t.dias_cura)||0} dias de cura${rend}</div>${selo}</div>
         <div class="preco" style="font-size:.78rem;text-align:right;line-height:1.3">${precos}</div>
       </div>`;
     }).join("");
@@ -2907,11 +2950,17 @@ function abrirModalQueijo(id){
       <div class="campo"><label>Rendimento (pç/L)</label><input id="q-rend" type="number" inputmode="decimal" value="${t.rendimento_esperado??""}" placeholder="opcional"></div>
       <div class="campo"><label>Unidade</label><select id="q-unid"><option value="peças" ${t.unidade!=="kg"?"selected":""}>peças</option><option value="kg" ${t.unidade==="kg"?"selected":""}>kg</option></select></div>
     </div>
+    <div class="rotulo" style="margin:10px 0 6px">Receita de insumos (por peça)</div>
+    <p class="dica" style="margin:-2px 0 8px">Quanto de cada insumo entra em 1 peça. O custo é calculado sozinho.</p>
+    <div id="q-receita"></div>
+    <button type="button" class="btn btn-fantasma" id="q-add-insumo" style="margin-top:4px;font-size:.84rem">+ Adicionar insumo à receita</button>
+    <div id="q-custo-box" class="custo-box"></div>
     ${campoCodigoBarras("q-cb","q-scan",t.codigo_barras)}
     <div class="erro" id="q-erro"></div>
     <button class="btn btn-primario" id="q-salvar">Salvar</button>
     ${botaoExcluir(id?"q-excluir":"","Excluir queijo")}`);
   $("#q-scan").onclick = () => abrirScanner(c => { $("#q-cb").value = c; toast("Código lido: "+c); });
+  if($("#q-peca")) $("#q-peca").addEventListener("input", atualizarCustoBox);
   fotoQueijoPend = null;
   $("#q-foto-btn").onclick = () => $("#q-foto").click();
   $("#q-foto").onchange = (e) => {
@@ -2920,6 +2969,62 @@ function abrirModalQueijo(id){
   };
   $("#q-salvar").onclick = () => salvarQueijo(id);
   if(id) $("#q-excluir").onclick = () => excluirQueijo(id);
+
+  // ----- receita de insumos (editável) -----
+  receitaPend = id
+    ? (state.receitas||[]).filter(r=>r.tipo_queijo_id===id).map(r=>({ insumo_id:r.insumo_id, quantidade:Number(r.quantidade)||0 }))
+    : [];
+  desenharReceita();
+  $("#q-add-insumo").onclick = () => {
+    if(!(state.insumos||[]).length){ toast("Cadastre um insumo primeiro em Cadastro › Insumos.", true); return; }
+    receitaPend.push({ insumo_id: state.insumos[0].id, quantidade: 0 });
+    desenharReceita();
+  };
+}
+
+let receitaPend = [];
+function desenharReceita(){
+  const box = $("#q-receita"); if(!box) return;
+  const insumos = state.insumos||[];
+  if(!receitaPend.length){
+    box.innerHTML = `<p class="dica" style="margin:0 0 4px">Nenhum insumo na receita ainda.</p>`;
+  } else {
+    box.innerHTML = receitaPend.map((r,idx) => {
+      const opts = insumos.map(i=>`<option value="${i.id}" ${r.insumo_id===i.id?"selected":""}>${esc(i.nome)}${i.unidade?" ("+esc(i.unidade)+")":""}</option>`).join("");
+      const ins = insumos.find(i=>i.id===r.insumo_id);
+      const un = ins&&ins.unidade ? esc(ins.unidade) : "un";
+      const custo = (Number(r.quantidade)||0) * custoUnitInsumo(ins);
+      return `<div class="rec-linha" data-idx="${idx}">
+        <select class="rec-insumo">${opts}</select>
+        <input class="rec-qtd" type="number" inputmode="decimal" value="${r.quantidade||""}" placeholder="qtd">
+        <span class="rec-un">${un}</span>
+        <span class="rec-custo">${brl(custo)}</span>
+        <button type="button" class="rec-x" title="Remover">✕</button>
+      </div>`;
+    }).join("");
+  }
+  // eventos
+  $$("#q-receita .rec-linha").forEach(l => {
+    const idx = +l.dataset.idx;
+    l.querySelector(".rec-insumo").onchange = (e) => { receitaPend[idx].insumo_id = e.target.value; desenharReceita(); };
+    l.querySelector(".rec-qtd").oninput = (e) => { receitaPend[idx].quantidade = parseFloat(e.target.value)||0; atualizarCustoBox(); l.querySelector(".rec-custo").textContent = brl((receitaPend[idx].quantidade)*custoUnitInsumo(state.insumos.find(i=>i.id===receitaPend[idx].insumo_id))); };
+    l.querySelector(".rec-x").onclick = () => { receitaPend.splice(idx,1); desenharReceita(); };
+  });
+  atualizarCustoBox();
+}
+function atualizarCustoBox(){
+  const box = $("#q-custo-box"); if(!box) return;
+  const custoIns = receitaPend.reduce((s,r)=> s + (Number(r.quantidade)||0)*custoUnitInsumo(state.insumos.find(i=>i.id===r.insumo_id)), 0);
+  const precoPeca = parseFloat($("#q-peca")?.value) || 0;
+  let linhaMargem = "";
+  if(precoPeca > 0){
+    const lucro = precoPeca - custoIns;
+    const margem = precoPeca > 0 ? (lucro/precoPeca*100) : 0;
+    const cor = lucro >= 0 ? "var(--verde)" : "var(--vermelho)";
+    linhaMargem = `<div class="custo-linha"><span>Preço de venda (peça)</span><b>${brl(precoPeca)}</b></div>
+      <div class="custo-linha"><span>Lucro por peça</span><b style="color:${cor}">${brl(lucro)} (${margem.toFixed(0)}%)</b></div>`;
+  }
+  box.innerHTML = `<div class="custo-linha"><span>Custo de insumos por peça</span><b>${brl(custoIns)}</b></div>${linhaMargem}`;
 }
 let fotoQueijoPend = null;
 async function salvarQueijo(id){
@@ -2958,6 +3063,26 @@ async function salvarQueijo(id){
     const { error } = await dbw("tipos_queijo").insert(novo);
     if(error){ state.tipos = state.tipos.filter(x=>x.id!==novo.id); renderCadastro(); toast("Não deu pra salvar.", true); }
   }
+  await salvarReceita(idFinal);
+}
+
+async function salvarReceita(tipoId){
+  // monta as novas linhas (ignora quantidade 0 ou insumo repetido/ inexistente)
+  const vistos = new Set();
+  const novas = (receitaPend||[]).filter(r => {
+    if(!r.insumo_id || vistos.has(r.insumo_id)) return false;
+    if(!(Number(r.quantidade) > 0)) return false;
+    vistos.add(r.insumo_id); return true;
+  }).map(r => ({ id:uid(), familia_id:familiaId, tipo_queijo_id:tipoId, insumo_id:r.insumo_id, quantidade:Number(r.quantidade)||0 }));
+
+  // atualiza state local
+  state.receitas = (state.receitas||[]).filter(r => r.tipo_queijo_id !== tipoId).concat(novas);
+
+  // banco: apaga as antigas do queijo e insere as novas
+  try{
+    await dbw("receita_insumos").delete().eq("tipo_queijo_id", tipoId);
+    if(novas.length) await dbw("receita_insumos").insert(novas);
+  }catch(e){ /* offline: outbox cuida */ }
 }
 async function excluirQueijo(id){
   if(state.lotes.some(l=>l.tipo_queijo_id===id)){ toast("Há lotes usando esse queijo.", true); return; }
