@@ -184,6 +184,8 @@ input,select{font-family:inherit;font-size:16px}
   padding:2px 7px;border-radius:20px;margin-left:6px;white-space:nowrap;vertical-align:middle}
 .pill-venc.on{background:var(--vermelho);color:#fff}
 .pill-venc.pago{background:var(--verde);color:#fff}
+.seg-pag{flex:1;padding:11px 8px;border:1px solid var(--linha-forte);background:var(--card);border-radius:11px;font-weight:700;font-size:.9rem;font-family:inherit;cursor:pointer;color:var(--tinta)}
+.seg-pag.ativo{background:var(--ouro);color:#fff;border-color:var(--ouro)}
 .btn-desc{margin-top:5px;background:transparent;color:var(--azul);border:1px solid var(--azul);border-radius:9px;padding:5px 12px;font-weight:700;font-size:.76rem;font-family:inherit;cursor:pointer;display:block;margin-left:auto}
 .btn-pago{margin-top:6px;background:var(--verde);color:#fff;border:none;border-radius:9px;
   padding:6px 14px;font-weight:700;font-size:.8rem;font-family:inherit;cursor:pointer}
@@ -416,7 +418,7 @@ body.leitura .cheque-card .nome, body.leitura .cheque-card .det, body.leitura .c
    ======================================================================= */
 const SUPABASE_URL      = "https://cadnmgaymgljmoadebkk.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uBKKvD_e5ef4326TvkFgcg_rRnjmTus";
-const APP_VER = "v60";
+const APP_VER = "v61";
 const SPLASH_MIN = 2400;
 const EMAIL_ADMIN = "jpferreira1356@icloud.com";
 const splashT0 = Date.now();                              // suba junto com o cache do sw.js
@@ -1592,7 +1594,7 @@ function renderLeiteAPagar(corpo){
   const G = grupos;
   $$("#leite-corpo [data-grupo]").forEach(el => el.onclick = () => abrirGrupoRecebimentos(G[el.dataset.grupo]));
   $$("#leite-corpo [data-pagociclo]").forEach(b => b.onclick = (e) => {
-    e.stopPropagation(); marcarPagoGrupo(G[b.dataset.pagociclo].itens.filter(estaFechado).map(r=>r.id));
+    e.stopPropagation(); pagarComEscolha(G[b.dataset.pagociclo].itens.filter(estaFechado).map(r=>r.id));
   });
   $$("#leite-corpo [data-desc]").forEach(b => b.onclick = (e) => { e.stopPropagation(); abrirModalDesconto(b.dataset.desc); });
   $$("#leite-corpo [data-fdet]").forEach(s => s.onclick = (e) => { e.stopPropagation(); abrirDetalheFornecedor(s.dataset.fdet); });
@@ -1655,7 +1657,7 @@ function abrirGrupoRecebimentos(g){
     <p class="dica">Lápis edita, lixeira apaga (pede senha). Toque no dia pra recolher.</p>`);
   $("#grupo-whats").onclick = () => mensagemFornecedor(g.fid, g.itens, dataBR(g.venc));
   if(!soLeitura && fechados.length){
-    $("#grupo-pagar").onclick = () => marcarPagoGrupo(fechados.map(r=>r.id));
+    $("#grupo-pagar").onclick = () => pagarComEscolha(fechados.map(r=>r.id));
     $("#grupo-reabrir").onclick = () => confirmarComSenha(`Reabrir o ciclo fechado de ${esc(nomeForn(g.fid))}?`, () => reabrirCiclo(g.fid, fechados.map(r=>r.id)));
   }
   if(!soLeitura && abertos.length) $("#grupo-fechar").onclick = () => fecharCicloFornecedor(g.fid, abertos.map(r=>r.id));
@@ -1719,7 +1721,51 @@ async function reabrirCiclo(fid, ids){
   if(error){ itens.forEach(r => r.ciclo_fechado = true); renderRecebimento(); toast("Erro ao reabrir: "+(error.message||"?"), true); }
 }
 
-async function marcarPagoGrupo(ids){
+function pagarComEscolha(ids){
+  if(bloqueiaLeitura()) return;
+  const alvo = state.recebimentos.filter(r => ids.includes(r.id) && !r.pago);
+  if(!alvo.length) return;
+  const fids = [...new Set(alvo.map(r=>r.fornecedor_id))];
+  const bruto = alvo.reduce((s,r)=> s+(Number(r.valor_total)||0),0);
+  const desc = state.descontos.filter(d=>fids.includes(d.fornecedor_id)&&!d.usado).reduce((s,d)=>s+(Number(d.valor)||0),0);
+  const liquido = Math.max(0, bruto-desc);
+  const nome = fids.length===1 ? nomeForn(fids[0]) : "vários fornecedores";
+  abrirFolha(`
+    <h2>Pagar ${esc(nome)}</h2>
+    <p class="dica" style="margin-top:-6px">${brl(bruto)}${desc>0?` − desconto ${brl(desc)}`:""} = <b>${brl(liquido)}</b></p>
+    <div class="rotulo">Como pagou?</div>
+    <div class="seg-linha" style="margin-bottom:12px">
+      <button class="seg-pag ativo" data-forma="dinheiro">💵 Dinheiro / Pix</button>
+      <button class="seg-pag" data-forma="cheque">📝 Cheque</button>
+    </div>
+    <div id="pg-cheque" style="display:none">
+      <div class="linha-campos">
+        <div class="campo"><label>Nº do cheque</label><input id="pg-num" inputmode="numeric" placeholder="opcional"></div>
+        <div class="campo"><label>Prazo (dias)</label><input id="pg-prazo" type="number" inputmode="numeric" value="30"></div>
+      </div>
+      <div class="campo"><label>Data do cheque</label><input id="pg-data" type="date" value="${hoje()}"></div>
+      <p class="dica" style="margin-top:-4px">O cheque de <b>${brl(liquido)}</b> vai cair no controle de cheques.</p>
+    </div>
+    <div class="erro" id="pg-erro"></div>
+    <button class="btn btn-primario" id="pg-ok" style="background:var(--verde)">Confirmar pagamento</button>`);
+  let forma = "dinheiro";
+  $$(".seg-pag").forEach(b => b.onclick = () => {
+    forma = b.dataset.forma;
+    $$(".seg-pag").forEach(x => x.classList.toggle("ativo", x===b));
+    $("#pg-cheque").style.display = forma==="cheque" ? "" : "none";
+  });
+  $("#pg-ok").onclick = () => {
+    let cheque = null;
+    if(forma === "cheque"){
+      cheque = { para:nome, valor:liquido, numero:($("#pg-num").value.trim()||null),
+                 prazo_dias:Math.max(0, parseInt($("#pg-prazo").value)||0), data:$("#pg-data").value||hoje() };
+    }
+    fecharModal();
+    marcarPagoGrupo(ids, cheque);
+  };
+}
+
+async function marcarPagoGrupo(ids, cheque){
   if(bloqueiaLeitura()) return;
   const alvo = state.recebimentos.filter(r => ids.includes(r.id));
   if(!alvo.length) return;
@@ -1730,10 +1776,18 @@ async function marcarPagoGrupo(ids){
     descUsar.forEach(d => d.usado = true);
     dbw("descontos").update({ usado:true }).in("id", descUsar.map(d=>d.id)).then(()=>{}, ()=>{});
   }
+  // se pagou com cheque, lança no controle de cheques
+  if(cheque && cheque.valor > 0){
+    const novoChq = { id:uid(), familia_id:familiaId, compensado:false, compensado_em:null,
+      para:cheque.para, valor:cheque.valor, numero:cheque.numero, data:cheque.data, prazo_dias:cheque.prazo_dias };
+    state.cheques.unshift(novoChq);
+    dbw("cheques").insert(novoChq).then(()=>{}, ()=>{});
+  }
   const bak = alvo.map(r => ({ id:r.id, pago:r.pago, pago_em:r.pago_em }));
   const em = hoje();
   alvo.forEach(r => { r.pago = true; r.pago_em = em; });
-  renderRecebimento(); toast(alvo.length === 1 ? "Pago. Foi pro histórico." : `${alvo.length} entregas pagas. Foram pro histórico.`);
+  renderRecebimento();
+  toast(cheque ? "Pago com cheque — lançado no controle. 📝" : (alvo.length === 1 ? "Pago. Foi pro histórico." : `${alvo.length} entregas pagas.`));
   const { error } = await dbw("recebimentos_leite").update({ pago:true, pago_em:em }).in("id", ids);
   if(error){
     bak.forEach(b => { const r = state.recebimentos.find(x=>x.id===b.id); if(r){ r.pago=b.pago; r.pago_em=b.pago_em; } });
