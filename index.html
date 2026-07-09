@@ -189,6 +189,9 @@ input,select{font-family:inherit;font-size:16px}
 .graf-card{background:var(--card);border:1px solid var(--linha);border-radius:var(--r);
   padding:14px 14px 8px;margin-bottom:12px;box-shadow:var(--sombra)}
 .graf-cab{margin-bottom:8px}
+.graf-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:4px}
+.graf-scroll svg{height:140px}
+.graf-dica-scroll{text-align:center;font-size:.72rem;color:var(--tinta-mole);margin-top:4px}
 .adm-online{display:flex;align-items:center;gap:12px;background:var(--card);border:1px solid var(--linha);border-radius:12px;padding:12px 14px;box-shadow:var(--sombra)}
 .adm-count{width:40px;height:40px;border-radius:11px;background:var(--verde);color:#fff;display:grid;place-items:center;font-weight:800;font-size:1.1rem;flex:none}
 .adm-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
@@ -393,7 +396,7 @@ input,select{font-family:inherit;font-size:16px}
    ======================================================================= */
 const SUPABASE_URL      = "https://cadnmgaymgljmoadebkk.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uBKKvD_e5ef4326TvkFgcg_rRnjmTus";
-const APP_VER = "v45";
+const APP_VER = "v46";
 const SPLASH_MIN = 2400;
 const EMAIL_ADMIN = "jpferreira1356@icloud.com";
 const splashT0 = Date.now();                              // suba junto com o cache do sw.js
@@ -1772,23 +1775,22 @@ function graficoCheques(pend){
   pend.forEach(c => { const d = bomParaDe(c); porDia[d] = (porDia[d]||0) + (Number(c.valor)||0); });
   const dias = Object.keys(porDia).sort();
   if(!dias.length) return "";
-  const W=320, H=124, PAD=6, GAP=6;
+  const H=140, PAD=8, GAP=10, BW=40;      // barra e espaço fixos
   const n = dias.length;
-  const bw = Math.min(44, (W-PAD*2-GAP*(n-1))/n);
-  const totalW = n*bw + (n-1)*GAP;
-  const x0 = PAD + Math.max(0, (W-PAD*2-totalW)/2);
+  const W = PAD*2 + n*BW + (n-1)*GAP;      // largura cresce com os dias (scroll)
   const max = Math.max(...dias.map(d=>porDia[d]), 1);
   let out = "";
   dias.forEach((d,i) => {
     const v = porDia[d];
-    const h = Math.max(4, (v/max)*(H-46));
-    const x = x0 + i*(bw+GAP), y = H-26-h;
+    const h = Math.max(4, (v/max)*(H-52));
+    const x = PAD + i*(BW+GAP), y = H-30-h;
     const venc = diffDias(d) <= 0;
-    out += `<rect data-gdia="${d}" x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${bw.toFixed(1)}" height="${h.toFixed(1)}" rx="3" fill="${venc?"var(--vermelho)":"var(--ouro)"}" style="cursor:pointer"/>`;
-    out += `<text x="${(x+bw/2).toFixed(1)}" y="${(y-5).toFixed(1)}" text-anchor="middle" font-size="8" fill="#8a7f68" font-family="'IBM Plex Mono',monospace">${Math.round(v)}</text>`;
-    out += `<text x="${(x+bw/2).toFixed(1)}" y="${H-12}" text-anchor="middle" font-size="8" fill="#8a7f68" font-family="'IBM Plex Mono',monospace">${d.slice(8,10)}/${d.slice(5,7)}</text>`;
+    out += `<rect data-gdia="${d}" x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${BW}" height="${h.toFixed(1)}" rx="4" fill="${venc?"var(--vermelho)":"var(--ouro)"}" style="cursor:pointer"/>`;
+    out += `<text x="${(x+BW/2).toFixed(1)}" y="${(y-6).toFixed(1)}" text-anchor="middle" font-size="9" fill="#8a7f68" font-family="'IBM Plex Mono',monospace">${Math.round(v)}</text>`;
+    out += `<text x="${(x+BW/2).toFixed(1)}" y="${H-14}" text-anchor="middle" font-size="9" fill="#8a7f68" font-family="'IBM Plex Mono',monospace">${d.slice(8,10)}/${d.slice(5,7)}</text>`;
   });
-  return `<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block">${out}</svg>`;
+  return `<div class="graf-scroll"><svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" style="display:block;max-width:none">${out}</svg></div>
+    ${n>6?`<div class="graf-dica-scroll">← arraste pro lado pra ver todos os dias →</div>`:""}`;
 }
 
 function abrirChequesDoDia(d){
