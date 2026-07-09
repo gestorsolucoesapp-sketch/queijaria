@@ -176,6 +176,7 @@ input,select{font-family:inherit;font-size:16px}
 .subnav a{flex:1;text-align:center;padding:9px 4px;border-radius:9px;font-size:.8rem;font-weight:600;color:var(--tinta);opacity:.5;cursor:pointer;white-space:nowrap;transition:all .15s}
 .subnav a.ativo{background:var(--ouro);color:#fff;opacity:1}
 .tipo .ver{color:var(--tinta-mole);font-size:1.4rem;line-height:1;padding-left:8px}
+.fila-badge{font-size:.6rem;font-weight:700;color:#fff;background:var(--azul);padding:2px 7px;border-radius:20px;margin-left:5px;white-space:nowrap}
 .verbadge{font-size:.62rem;font-weight:700;color:var(--tinta-mole);background:var(--linha);
   padding:2px 6px;border-radius:20px;margin-left:6px;letter-spacing:.5px;vertical-align:middle}
 .tipo.vencido{border:1.5px solid var(--vermelho);box-shadow:0 0 0 3px rgba(192,57,43,.08)}
@@ -350,6 +351,7 @@ body.leitura .cheque-card .nome, body.leitura .cheque-card .det, body.leitura .c
       <img src="logo.png" alt="" style="width:44px;height:44px;border-radius:11px;object-fit:contain" onerror="this.style.display='none'">
       <b id="topo-nome">Queijaria</b>
       <span id="topo-ver" class="verbadge"></span>
+      <span id="fila-badge" class="fila-badge" style="display:none"></span>
     </div>
     <div class="topo-acoes">
       <button class="icone-btn" id="btn-config" title="Configurações">
@@ -414,7 +416,7 @@ body.leitura .cheque-card .nome, body.leitura .cheque-card .det, body.leitura .c
    ======================================================================= */
 const SUPABASE_URL      = "https://cadnmgaymgljmoadebkk.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uBKKvD_e5ef4326TvkFgcg_rRnjmTus";
-const APP_VER = "v55";
+const APP_VER = "v56";
 const SPLASH_MIN = 2400;
 const EMAIL_ADMIN = "jpferreira1356@icloud.com";
 const splashT0 = Date.now();                              // suba junto com o cache do sw.js
@@ -663,7 +665,80 @@ $("#fam-criar").onclick = async () => {
 };
 
 /* ===================== dados ===================== */
+/* ===================== OFFLINE (fila + cache) ===================== */
+const OUTBOX_KEY = "queijaria_outbox";
+const ESTADO_KEY = "queijaria_estado";
+function outboxLer(){ try { return JSON.parse(localStorage.getItem(OUTBOX_KEY)||"[]"); } catch(e){ return []; } }
+function outboxSalvar(a){ try { localStorage.setItem(OUTBOX_KEY, JSON.stringify(a)); } catch(e){} atualizarIndicadorFila(); }
+function enfileirar(entry){ const a = outboxLer(); a.push(entry); outboxSalvar(a); }
+function ehErroRede(err){
+  const m = ((err && (err.message||err.details))||"").toString().toLowerCase();
+  return !navigator.onLine || m.includes("fetch") || m.includes("network") || m.includes("failed to");
+}
+function dbw(table){
+  return {
+    insert(vals){ return _dispatch({ table, op:"insert", vals }); },
+    upsert(vals){ return _dispatch({ table, op:"upsert", vals }); },
+    update(vals){ return _cond(table,"update",vals); },
+    delete(){ return _cond(table,"delete",null); }
+  };
+}
+function _cond(table,op,vals){
+  const filt = [];
+  return {
+    eq(col,val){ filt.push(["eq",col,val]); return _dispatch({ table, op, vals, filt }); },
+    in(col,val){ filt.push(["in",col,val]); return _dispatch({ table, op, vals, filt }); }
+  };
+}
+async function _runSupabase(entry){
+  let q = sb.from(entry.table);
+  if(entry.op==="insert") q = q.insert(entry.vals);
+  else if(entry.op==="upsert") q = q.upsert(entry.vals);
+  else if(entry.op==="update") q = q.update(entry.vals);
+  else if(entry.op==="delete") q = q.delete();
+  (entry.filt||[]).forEach(([t,col,val]) => { q = (t==="in") ? q.in(col,val) : q.eq(col,val); });
+  return await q;
+}
+async function _dispatch(entry){
+  if(!navigator.onLine){ enfileirar(entry); return { error:null, _fila:true }; }
+  try {
+    const res = await _runSupabase(entry);
+    if(res && res.error && ehErroRede(res.error)){ enfileirar(entry); return { error:null, _fila:true }; }
+    return res || { error:null };
+  } catch(e){ enfileirar(entry); return { error:null, _fila:true }; }
+}
+let _processando = false;
+async function processarFila(){
+  if(_processando || !navigator.onLine) return;
+  let a = outboxLer();
+  if(!a.length){ atualizarIndicadorFila(); return; }
+  _processando = true;
+  while(a.length){
+    try {
+      const res = await _runSupabase(a[0]);
+      if(res && res.error && ehErroRede(res.error)) break;   // rede caiu, tenta depois
+    } catch(e){ break; }
+    a.shift(); outboxSalvar(a); a = outboxLer();
+  }
+  _processando = false;
+  atualizarIndicadorFila();
+  if(!outboxLer().length && navigator.onLine){ try { await carregarTudo(); irPara(paginaAtual()); } catch(e){} }
+}
+function atualizarIndicadorFila(){
+  const el = document.getElementById("fila-badge"); if(!el) return;
+  const n = outboxLer().length;
+  el.textContent = n ? `⏳ ${n} p/ enviar` : "";
+  el.style.display = n ? "" : "none";
+}
+window.addEventListener("online", () => { toast("Conexão voltou — enviando lançamentos…"); processarFila(); });
+window.addEventListener("offline", () => { toast("Sem internet — salvando no aparelho. 📴"); });
+setInterval(() => processarFila(), 20000);
+
+function salvarCacheEstado(){ try { localStorage.setItem(ESTADO_KEY, JSON.stringify(state)); } catch(e){} }
+function carregarCacheEstado(){ try { const s = JSON.parse(localStorage.getItem(ESTADO_KEY)); if(s) Object.assign(state, s); } catch(e){} }
+
 async function carregarTudo(){
+  if(!navigator.onLine){ carregarCacheEstado(); return; }
   const q = (p) => p.then(r => r.data || []).catch(() => []);
   const [t, l, f, lf, ins, rec, vds, chq, dsc] = await Promise.all([
     q(sb.from("tipos_queijo").select("*").eq("familia_id", familiaId).order("nome")),
@@ -679,6 +754,7 @@ async function carregarTudo(){
   let cfg = {};
   try { const r = await sb.from("queijaria_config").select("*").eq("familia_id", familiaId).maybeSingle(); cfg = r.data || {}; } catch(e){}
   state.tipos = t; state.lotes = l; state.fornecedores = f; state.leiteFaixas = lf; state.insumos = ins; state.config = cfg; state.recebimentos = rec; state.vendas = vds; state.cheques = chq; state.descontos = dsc;
+  salvarCacheEstado();
 }
 
 /* ===================== app / navegação ===================== */
@@ -693,6 +769,7 @@ async function abrirApp(){
   aplicarLeitura();
   irPara("inicio");
   aplicarAbas();
+  atualizarIndicadorFila(); processarFila();
   iniciarRealtime();
 }
 
@@ -770,6 +847,7 @@ function anelSVG(pct, cor){
 function nomeTipo(id){ const t = state.tipos.find(x=>x.id===id); return t ? t.nome : "Sem tipo"; }
 
 function renderInicio(){
+  salvarCacheEstado();
   const ativos = state.lotes.filter(l => l.status !== "vendido" && l.status !== "descartado");
   const comp = ativos.map(l => ({ l, c: curaDoLote(l) }));
   const emCura  = comp.filter(x => x.c.status === "curando").reduce((s,x)=> s + (Number(x.l.pecas_produzidas)||0), 0);
@@ -886,7 +964,7 @@ async function marcarPronto(id){
   const l = state.lotes.find(x=>x.id===id); if(!l) return;
   l.status = "pronto"; l.data_pronto = l.data_pronto || hoje(); // otimista
   irPara(paginaAtual());
-  const { error } = await sb.from("lotes").update({ status:"pronto" }).eq("id", id);
+  const { error } = await dbw("lotes").update({ status:"pronto" }).eq("id", id);
   if(error){ l.status = "curando"; irPara(paginaAtual()); toast("Não deu pra atualizar.", true); }
   else toast("Lote marcado como pronto.");
 }
@@ -895,7 +973,7 @@ async function registrarVenda(id){
   const l = state.lotes.find(x=>x.id===id); if(!l) return;
   const anterior = l.status;
   l.status = "vendido"; irPara(paginaAtual()); // otimista
-  const { error } = await sb.from("lotes").update({ status:"vendido" }).eq("id", id);
+  const { error } = await dbw("lotes").update({ status:"vendido" }).eq("id", id);
   if(error){ l.status = anterior; irPara(paginaAtual()); toast("Não deu pra registrar.", true); }
   else toast("Lote marcado como vendido.");
 }
@@ -939,7 +1017,7 @@ async function salvarAbasVisiveis(){
   state.config = state.config || {};
   state.config.abas_visiveis = valor;
   fecharModal(); aplicarAbas(); toast("Abas atualizadas para a equipe.");
-  const { error } = await sb.from("queijaria_config").upsert({ familia_id:familiaId, abas_visiveis:valor });
+  const { error } = await dbw("queijaria_config").upsert({ familia_id:familiaId, abas_visiveis:valor });
   if(error) toast("Erro ao salvar abas: "+(error.message||"?"), true);
 }
 function abrirModalConfig(){
@@ -1169,6 +1247,7 @@ function cardProdutoHTML(t){
 
 /* ===================== render: VENDAS ===================== */
 function renderVendas(){
+  salvarCacheEstado();
   const vds = state.vendas;
   const hj = hoje();
   const totalHoje = vds.filter(v=>v.data===hj).reduce((s,v)=>s+(Number(v.valor_total)||0),0);
@@ -1270,19 +1349,19 @@ async function salvarVenda(id){
     if(!v){ fecharModal(); toast("Registro não encontrado. Recarregue o app.", true); return; }
     const bak = {...v}; Object.assign(v, dados);
     fecharModal(); renderVendas(); toast("Venda atualizada.");
-    const { error } = await sb.from("vendas").update(dados).eq("id", id);
+    const { error } = await dbw("vendas").update(dados).eq("id", id);
     if(error){ Object.assign(v, bak); renderVendas(); toast("Erro ao salvar: "+(error.message||"?"), true); }
   } else {
     const novo = { id:uid(), familia_id:familiaId, ...dados };
     state.vendas.unshift(novo); fecharModal(); renderVendas(); toast("Venda registrada.");
-    const { error } = await sb.from("vendas").insert(novo);
+    const { error } = await dbw("vendas").insert(novo);
     if(error){ state.vendas = state.vendas.filter(x=>x.id!==novo.id); renderVendas(); toast("Erro ao salvar: "+(error.message||"?"), true); }
   }
 }
 async function excluirVenda(id){
   const bak = state.vendas; state.vendas = state.vendas.filter(x=>x.id!==id);
   fecharModal(); renderVendas(); toast("Venda excluída.");
-  const { error } = await sb.from("vendas").delete().eq("id", id);
+  const { error } = await dbw("vendas").delete().eq("id", id);
   if(error){ state.vendas = bak; renderVendas(); toast("Erro ao excluir: "+(error.message||"?"), true); }
 }
 
@@ -1384,7 +1463,7 @@ function abrirDetalheFornecedor(fid){
     confirmarComSenha(`Mudar o período de ${esc(f.nome)} para ${novo===1?"1 dia":novo+" dias"}? Os vencimentos serão recalculados.`, async () => {
       const bak = f.prazo_pagamento; f.prazo_pagamento = novo;
       abrirDetalheFornecedor(fid); toast(`Período: ${novo===1?"1 dia":novo+" dias"}.`);
-      const { error } = await sb.from("fornecedores").update({ prazo_pagamento: novo }).eq("id", fid);
+      const { error } = await dbw("fornecedores").update({ prazo_pagamento: novo }).eq("id", fid);
       if(error){ f.prazo_pagamento = bak; abrirDetalheFornecedor(fid); toast("Erro ao mudar o período: "+(error.message||"?"), true); }
     });
   });
@@ -1392,6 +1471,7 @@ function abrirDetalheFornecedor(fid){
 
 function renderRecebimento(){
   autoFecharCiclos();
+  salvarCacheEstado();
   const LEITE_ABAS = [["apagar","A pagar"],["historico","Histórico"],["graficos","Gráficos"],["cheques","Cheques"]];
   const subnav = LEITE_ABAS.map(([k,r]) => `<a data-lab="${k}" class="${k===leiteAba?"ativo":""}">${r}</a>`).join("");
   $("#view-leite").innerHTML = `<div class="subnav">${subnav}</div><div id="leite-corpo"></div>`;
@@ -1416,7 +1496,7 @@ function autoFecharCiclos(){
   if(!paraFechar.length) return;
   paraFechar.forEach(r => r.ciclo_fechado = true);
   const ids = paraFechar.map(r=>r.id);
-  sb.from("recebimentos_leite").update({ ciclo_fechado:true }).in("id", ids).then(()=>{}, ()=>{});
+  dbw("recebimentos_leite").update({ ciclo_fechado:true }).in("id", ids).then(()=>{}, ()=>{});
 }
 
 function renderLeiteAPagar(corpo){
@@ -1602,8 +1682,8 @@ function fecharCicloFornecedor(fid, ids){
     itens.forEach(r => { r.ciclo_fechado = true; });
     f.prazo_pagamento = novoPrazo;
     fecharModal(); renderRecebimento(); toast("Ciclo fechado. Novo ciclo começou. ✅");
-    const { error: e1 } = await sb.from("recebimentos_leite").update({ ciclo_fechado:true }).in("id", ids2);
-    const { error: e2 } = await sb.from("fornecedores").update({ prazo_pagamento:novoPrazo }).eq("id", fid);
+    const { error: e1 } = await dbw("recebimentos_leite").update({ ciclo_fechado:true }).in("id", ids2);
+    const { error: e2 } = await dbw("fornecedores").update({ prazo_pagamento:novoPrazo }).eq("id", fid);
     if(e1 || e2){
       itens.forEach(r => { r.ciclo_fechado = false; });
       f.prazo_pagamento = prazoBak; renderRecebimento();
@@ -1618,7 +1698,7 @@ async function reabrirCiclo(fid, ids){
   if(!itens.length){ toast("Nada pra reabrir.", true); return; }
   itens.forEach(r => r.ciclo_fechado = false);
   fecharModal(); renderRecebimento(); toast("Ciclo reaberto.");
-  const { error } = await sb.from("recebimentos_leite").update({ ciclo_fechado:false }).in("id", itens.map(r=>r.id));
+  const { error } = await dbw("recebimentos_leite").update({ ciclo_fechado:false }).in("id", itens.map(r=>r.id));
   if(error){ itens.forEach(r => r.ciclo_fechado = true); renderRecebimento(); toast("Erro ao reabrir: "+(error.message||"?"), true); }
 }
 
@@ -1631,13 +1711,13 @@ async function marcarPagoGrupo(ids){
   const descUsar = state.descontos.filter(d => fids.includes(d.fornecedor_id) && !d.usado);
   if(descUsar.length){
     descUsar.forEach(d => d.usado = true);
-    sb.from("descontos").update({ usado:true }).in("id", descUsar.map(d=>d.id)).then(()=>{}, ()=>{});
+    dbw("descontos").update({ usado:true }).in("id", descUsar.map(d=>d.id)).then(()=>{}, ()=>{});
   }
   const bak = alvo.map(r => ({ id:r.id, pago:r.pago, pago_em:r.pago_em }));
   const em = hoje();
   alvo.forEach(r => { r.pago = true; r.pago_em = em; });
   renderRecebimento(); toast(alvo.length === 1 ? "Pago. Foi pro histórico." : `${alvo.length} entregas pagas. Foram pro histórico.`);
-  const { error } = await sb.from("recebimentos_leite").update({ pago:true, pago_em:em }).in("id", ids);
+  const { error } = await dbw("recebimentos_leite").update({ pago:true, pago_em:em }).in("id", ids);
   if(error){
     bak.forEach(b => { const r = state.recebimentos.find(x=>x.id===b.id); if(r){ r.pago=b.pago; r.pago_em=b.pago_em; } });
     renderRecebimento(); toast("Erro ao marcar pago: "+(error.message||"?"), true);
@@ -1818,7 +1898,7 @@ function abrirModalPrazo(fid){
     if(authErr){ $("#pz-erro").textContent = "Senha incorreta."; $("#pz-salvar").disabled = false; $("#pz-salvar").textContent = "Salvar"; return; }
     const bak = f.prazo_pagamento; f.prazo_pagamento = dias;
     fecharModal(); renderRecebimento(); toast(`Período de ${esc(f.nome)}: ${prazoRot(dias)}.`);
-    const { error } = await sb.from("fornecedores").update({ prazo_pagamento: dias }).eq("id", fid);
+    const { error } = await dbw("fornecedores").update({ prazo_pagamento: dias }).eq("id", fid);
     if(error){ f.prazo_pagamento = bak; renderRecebimento(); toast("Erro ao mudar o período: "+(error.message||"?"), true); }
   };
 }
@@ -1858,13 +1938,13 @@ async function salvarDesconto(fid){
   if(valor <= 0){ $("#d-erro").textContent = "Informe o valor do desconto."; return; }
   const novo = { id:uid(), familia_id:familiaId, fornecedor_id:fid, descricao:$("#d-desc").value.trim()||null, valor, data:$("#d-data").value||hoje(), usado:false };
   state.descontos.unshift(novo); fecharModal(); renderRecebimento(); toast("Desconto adicionado.");
-  const { error } = await sb.from("descontos").insert(novo);
+  const { error } = await dbw("descontos").insert(novo);
   if(error){ state.descontos = state.descontos.filter(x=>x.id!==novo.id); renderRecebimento(); toast("Erro ao salvar desconto: "+(error.message||"?"), true); }
 }
 async function excluirDesconto(id){
   const bak = state.descontos; state.descontos = state.descontos.filter(x=>x.id!==id);
   fecharModal(); renderRecebimento(); toast("Desconto removido.");
-  const { error } = await sb.from("descontos").delete().eq("id", id);
+  const { error } = await dbw("descontos").delete().eq("id", id);
   if(error){ state.descontos = bak; renderRecebimento(); toast("Erro ao remover: "+(error.message||"?"), true); }
 }
 
@@ -1925,19 +2005,19 @@ async function salvarRecebimento(id){
     const bak = {...r}; Object.assign(r, dados);
     state.recebimentos.sort((a,b)=>String(b.data).localeCompare(String(a.data)));
     fecharModal(); renderRecebimento(); toast("Recebimento atualizado.");
-    const { error } = await sb.from("recebimentos_leite").update(dados).eq("id", id);
+    const { error } = await dbw("recebimentos_leite").update(dados).eq("id", id);
     if(error){ Object.assign(r, bak); renderRecebimento(); toast("Erro ao salvar: "+(error.message||error.code||"?"), true); }
   } else {
     const novo = { id:uid(), familia_id:familiaId, ...dados };
     state.recebimentos.unshift(novo); fecharModal(); renderRecebimento(); toast("Recebimento lançado.");
-    const { error } = await sb.from("recebimentos_leite").insert(novo);
+    const { error } = await dbw("recebimentos_leite").insert(novo);
     if(error){ state.recebimentos = state.recebimentos.filter(x=>x.id!==novo.id); renderRecebimento(); toast("Erro ao salvar: "+(error.message||error.code||"?"), true); }
   }
 }
 async function excluirRecebimento(id){
   const bak = state.recebimentos; state.recebimentos = state.recebimentos.filter(x=>x.id!==id);
   fecharModal(); renderRecebimento(); toast("Recebimento excluído.");
-  const { error } = await sb.from("recebimentos_leite").delete().eq("id", id);
+  const { error } = await dbw("recebimentos_leite").delete().eq("id", id);
   if(error){ state.recebimentos = bak; renderRecebimento(); toast("Erro ao excluir: "+(error.message||error.code||"?"), true); }
 }
 
@@ -2119,12 +2199,12 @@ async function salvarCheque(id){
     if(!c){ fecharModal(); toast("Registro não encontrado. Recarregue o app.", true); return; }
     const bak = {...c}; Object.assign(c, dados);
     fecharModal(); refreshCheques(); toast("Cheque atualizado.");
-    const { error } = await sb.from("cheques").update(dados).eq("id", id);
+    const { error } = await dbw("cheques").update(dados).eq("id", id);
     if(error){ Object.assign(c, bak); refreshCheques(); toast("Erro ao salvar: "+(error.message||"?"), true); }
   } else {
     const novo = { id:uid(), familia_id:familiaId, compensado:false, ...dados };
     state.cheques.unshift(novo); fecharModal(); refreshCheques(); toast("Cheque registrado.");
-    const { error } = await sb.from("cheques").insert(novo);
+    const { error } = await dbw("cheques").insert(novo);
     if(error){ state.cheques = state.cheques.filter(x=>x.id!==novo.id); refreshCheques(); toast("Erro ao salvar: "+(error.message||"?"), true); }
   }
 }
@@ -2136,7 +2216,7 @@ async function alternarBaixaCheque(id){
   if(!c.compensado){ c.compensado = true; c.compensado_em = hoje(); toast("Baixa dada. Foi pros compensados."); }
   else { c.compensado = false; c.compensado_em = null; toast("Baixa desfeita."); }
   refreshCheques();
-  const { error } = await sb.from("cheques").update({ compensado:c.compensado, compensado_em:c.compensado_em }).eq("id", id);
+  const { error } = await dbw("cheques").update({ compensado:c.compensado, compensado_em:c.compensado_em }).eq("id", id);
   if(error){ Object.assign(c, bak); refreshCheques(); toast("Erro: "+(error.message||"?"), true); }
 }
 async function marcarCompensado(id){
@@ -2146,13 +2226,13 @@ async function marcarCompensado(id){
   const bak = { compensado:c.compensado, compensado_em:c.compensado_em };
   c.compensado = true; c.compensado_em = hoje();
   refreshCheques(); toast("Cheque compensado.");
-  const { error } = await sb.from("cheques").update({ compensado:true, compensado_em:c.compensado_em }).eq("id", id);
+  const { error } = await dbw("cheques").update({ compensado:true, compensado_em:c.compensado_em }).eq("id", id);
   if(error){ Object.assign(c, bak); refreshCheques(); toast("Erro: "+(error.message||"?"), true); }
 }
 async function excluirCheque(id){
   const bak = state.cheques; state.cheques = state.cheques.filter(x=>x.id!==id);
   fecharModal(); refreshCheques(); toast("Cheque excluído.");
-  const { error } = await sb.from("cheques").delete().eq("id", id);
+  const { error } = await dbw("cheques").delete().eq("id", id);
   if(error){ state.cheques = bak; refreshCheques(); toast("Erro ao excluir: "+(error.message||"?"), true); }
 }
 
@@ -2170,6 +2250,7 @@ function botaoNovo(id, label){
 function vazioCad(txt){ return `<div class="vazio"><div>${txt}</div></div>`; }
 
 function renderCadastro(){
+  salvarCacheEstado();
   const subnav = CAD_ABAS.map(([k,r]) => `<a data-cad="${k}" class="${k===cadAba?"ativo":""}">${r}</a>`).join("");
   $("#view-cadastro").innerHTML = `<div class="subnav">${subnav}</div><div id="cad-corpo"></div>`;
   $$("#view-cadastro .subnav a").forEach(a => a.onclick = () => { cadAba = a.dataset.cad; renderCadastro(); });
@@ -2376,19 +2457,19 @@ async function salvarFornecedor(id){
     if(!f){ fecharModal(); toast("Registro não encontrado. Recarregue o app.", true); return; }
     const bak = {...f}; Object.assign(f, dados);
     ordenarPorNome(state.fornecedores); fecharModal(); renderCadastro(); toast("Fornecedor atualizado.");
-    const { error } = await sb.from("fornecedores").update(dados).eq("id", id);
+    const { error } = await dbw("fornecedores").update(dados).eq("id", id);
     if(error){ Object.assign(f, bak); renderCadastro(); toast("Não deu pra salvar.", true); }
   } else {
     const novo = { id:uid(), familia_id:familiaId, ...dados };
     state.fornecedores.push(novo); ordenarPorNome(state.fornecedores); fecharModal(); renderCadastro(); toast("Fornecedor cadastrado.");
-    const { error } = await sb.from("fornecedores").insert(novo);
+    const { error } = await dbw("fornecedores").insert(novo);
     if(error){ state.fornecedores = state.fornecedores.filter(x=>x.id!==novo.id); renderCadastro(); toast("Não deu pra salvar.", true); }
   }
 }
 async function excluirFornecedor(id){
   const bak = state.fornecedores; state.fornecedores = state.fornecedores.filter(x=>x.id!==id);
   fecharModal(); renderCadastro(); toast("Fornecedor excluído.");
-  const { error } = await sb.from("fornecedores").delete().eq("id", id);
+  const { error } = await dbw("fornecedores").delete().eq("id", id);
   if(error){ state.fornecedores = bak; renderCadastro(); toast("Não deu pra excluir.", true); }
 }
 
@@ -2405,7 +2486,7 @@ function abrirModalPrecoPadrao(){
 async function salvarPrecoPadrao(){
   const v = parseFloat($("#p-preco").value)||0; const bak = state.config.preco_leite_padrao;
   state.config.preco_leite_padrao = v; fecharModal(); renderCadastro(); toast("Preço padrão salvo.");
-  const { error } = await sb.from("queijaria_config").upsert({ familia_id:familiaId, preco_leite_padrao:v });
+  const { error } = await dbw("queijaria_config").upsert({ familia_id:familiaId, preco_leite_padrao:v });
   if(error){ state.config.preco_leite_padrao = bak; renderCadastro(); toast("Não deu pra salvar.", true); }
 }
 function abrirModalFaixa(id){
@@ -2435,19 +2516,19 @@ async function salvarFaixa(id){
     if(!x){ fecharModal(); toast("Registro não encontrado. Recarregue o app.", true); return; }
     const bak = {...x}; Object.assign(x, dados);
     fecharModal(); renderCadastro(); toast("Faixa atualizada.");
-    const { error } = await sb.from("leite_faixas").update(dados).eq("id", id);
+    const { error } = await dbw("leite_faixas").update(dados).eq("id", id);
     if(error){ Object.assign(x, bak); renderCadastro(); toast("Não deu pra salvar.", true); }
   } else {
     const novo = { id:uid(), familia_id:familiaId, ...dados };
     state.leiteFaixas.push(novo); fecharModal(); renderCadastro(); toast("Faixa cadastrada.");
-    const { error } = await sb.from("leite_faixas").insert(novo);
+    const { error } = await dbw("leite_faixas").insert(novo);
     if(error){ state.leiteFaixas = state.leiteFaixas.filter(f=>f.id!==novo.id); renderCadastro(); toast("Não deu pra salvar.", true); }
   }
 }
 async function excluirFaixa(id){
   const bak = state.leiteFaixas; state.leiteFaixas = state.leiteFaixas.filter(f=>f.id!==id);
   fecharModal(); renderCadastro(); toast("Faixa excluída.");
-  const { error } = await sb.from("leite_faixas").delete().eq("id", id);
+  const { error } = await dbw("leite_faixas").delete().eq("id", id);
   if(error){ state.leiteFaixas = bak; renderCadastro(); toast("Não deu pra excluir.", true); }
 }
 
@@ -2527,12 +2608,12 @@ async function salvarQueijo(id){
     if(!t){ fecharModal(); toast("Registro não encontrado. Recarregue o app.", true); return; }
     const bak = {...t}; Object.assign(t, dados);
     ordenarPorNome(state.tipos); fecharModal(); renderCadastro(); toast("Queijo atualizado.");
-    const { error } = await sb.from("tipos_queijo").update(dados).eq("id", id);
+    const { error } = await dbw("tipos_queijo").update(dados).eq("id", id);
     if(error){ Object.assign(t, bak); renderCadastro(); toast("Não deu pra salvar.", true); }
   } else {
     const novo = { id:idFinal, familia_id:familiaId, ...dados };
     state.tipos.push(novo); ordenarPorNome(state.tipos); fecharModal(); renderCadastro(); toast("Queijo cadastrado.");
-    const { error } = await sb.from("tipos_queijo").insert(novo);
+    const { error } = await dbw("tipos_queijo").insert(novo);
     if(error){ state.tipos = state.tipos.filter(x=>x.id!==novo.id); renderCadastro(); toast("Não deu pra salvar.", true); }
   }
 }
@@ -2540,7 +2621,7 @@ async function excluirQueijo(id){
   if(state.lotes.some(l=>l.tipo_queijo_id===id)){ toast("Há lotes usando esse queijo.", true); return; }
   const bak = state.tipos; state.tipos = state.tipos.filter(x=>x.id!==id);
   fecharModal(); renderCadastro(); toast("Queijo excluído.");
-  const { error } = await sb.from("tipos_queijo").delete().eq("id", id);
+  const { error } = await dbw("tipos_queijo").delete().eq("id", id);
   if(error){ state.tipos = bak; renderCadastro(); toast("Não deu pra excluir.", true); }
 }
 
@@ -2586,19 +2667,19 @@ async function salvarInsumo(id){
     if(!i){ fecharModal(); toast("Registro não encontrado. Recarregue o app.", true); return; }
     const bak = {...i}; Object.assign(i, dados);
     ordenarPorNome(state.insumos); fecharModal(); renderCadastro(); toast("Insumo atualizado.");
-    const { error } = await sb.from("insumos").update(dados).eq("id", id);
+    const { error } = await dbw("insumos").update(dados).eq("id", id);
     if(error){ Object.assign(i, bak); renderCadastro(); toast("Não deu pra salvar.", true); }
   } else {
     const novo = { id:uid(), familia_id:familiaId, ...dados };
     state.insumos.push(novo); ordenarPorNome(state.insumos); fecharModal(); renderCadastro(); toast("Insumo cadastrado.");
-    const { error } = await sb.from("insumos").insert(novo);
+    const { error } = await dbw("insumos").insert(novo);
     if(error){ state.insumos = state.insumos.filter(x=>x.id!==novo.id); renderCadastro(); toast("Não deu pra salvar.", true); }
   }
 }
 async function excluirInsumo(id){
   const bak = state.insumos; state.insumos = state.insumos.filter(x=>x.id!==id);
   fecharModal(); renderCadastro(); toast("Insumo excluído.");
-  const { error } = await sb.from("insumos").delete().eq("id", id);
+  const { error } = await dbw("insumos").delete().eq("id", id);
   if(error){ state.insumos = bak; renderCadastro(); toast("Não deu pra excluir.", true); }
 }
 
@@ -2671,7 +2752,7 @@ async function salvarLote(){
   };
   state.lotes.unshift(novo); // otimista
   fecharModal(); irPara("inicio"); toast("Lote registrado.");
-  const { error } = await sb.from("lotes").insert(novo);
+  const { error } = await dbw("lotes").insert(novo);
   if(error){ state.lotes = state.lotes.filter(l=>l.id!==novo.id); irPara("inicio"); toast("Não deu pra salvar o lote.", true); }
 }
 
