@@ -416,7 +416,7 @@ body.leitura .cheque-card .nome, body.leitura .cheque-card .det, body.leitura .c
    ======================================================================= */
 const SUPABASE_URL      = "https://cadnmgaymgljmoadebkk.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uBKKvD_e5ef4326TvkFgcg_rRnjmTus";
-const APP_VER = "v58";
+const APP_VER = "v59";
 const SPLASH_MIN = 2400;
 const EMAIL_ADMIN = "jpferreira1356@icloud.com";
 const splashT0 = Date.now();                              // suba junto com o cache do sw.js
@@ -2075,15 +2075,27 @@ function mensagemFornecedor(fid, itens, vencTxt){
   if(!f){ toast("Fornecedor não encontrado.", true); return; }
   if(!soDigitos(f.telefone)){ toast("Esse fornecedor não tem telefone cadastrado.", true); return; }
   const lista = [...itens].sort((a,b)=> String(a.data).localeCompare(String(b.data)))
-    .map(r => `${dataBR(r.data)}: ${num(r.litros)} L x ${brl(r.preco_litro)} = ${brl(r.valor_total)}`);
+    .map(r => `  • ${dataBR(r.data)} — ${num(r.litros)} L × ${brl(r.preco_litro)} = ${brl(r.valor_total)}`);
   const total = itens.reduce((s,r)=> s + (Number(r.valor_total)||0), 0);
   const litros = itens.reduce((s,r)=> s + (Number(r.litros)||0), 0);
-  const txt =
-`Olá, ${f.nome}! Segue o acerto do leite - Queijaria Bene:
+  const descs = descsPendentes(fid);
+  const totalDesc = descs.reduce((s,d)=> s + (Number(d.valor)||0), 0);
+  const liquido = total - totalDesc;
 
-${lista.join("\n")}
-
-Total: ${num(litros)} L - ${brl(total)}` + (vencTxt?`\nPagamento: ${vencTxt}`:"");
+  let txt = `*\u{1F9C0} QUEIJARIA BENE*\n_Da nossa para sua família_\n`;
+  txt += `\u2501\u2501\u2501\u2501\u2501\u2501\u2501\u2501\n`;
+  txt += `*Acerto do leite*\n\n`;
+  txt += `Olá, *${f.nome}*! Segue o acerto das suas entregas:\n\n`;
+  txt += `${lista.join("\n")}\n\n`;
+  txt += `Subtotal: *${num(litros)} L* \u2014 ${brl(total)}\n`;
+  if(descs.length){
+    txt += `\n*Descontos:*\n`;
+    descs.forEach(d => { txt += `  \u2212 ${d.descricao ? d.descricao+" \u2014 " : ""}${brl(d.valor)}\n`; });
+    txt += `Total descontos: \u2212${brl(totalDesc)}\n`;
+  }
+  txt += `\n*\u{1F4B0} Total a pagar: ${brl(liquido)}*`;
+  if(vencTxt) txt += `\n\u{1F4C5} Pagamento: *${vencTxt}*`;
+  txt += `\n\n_Obrigado pela parceria!_ \u{1F42E}`;
   window.open(linkWhats(f.telefone, txt), "_blank");
 }
 
