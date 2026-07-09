@@ -393,7 +393,7 @@ input,select{font-family:inherit;font-size:16px}
    ======================================================================= */
 const SUPABASE_URL      = "https://cadnmgaymgljmoadebkk.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uBKKvD_e5ef4326TvkFgcg_rRnjmTus";
-const APP_VER = "v43";
+const APP_VER = "v44";
 const SPLASH_MIN = 2400;
 const EMAIL_ADMIN = "jpferreira1356@icloud.com";
 const splashT0 = Date.now();                              // suba junto com o cache do sw.js
@@ -1291,6 +1291,7 @@ function abrirDetalheFornecedor(fid){
 }
 
 function renderRecebimento(){
+  autoFecharCiclos();
   const LEITE_ABAS = [["apagar","A pagar"],["historico","Histórico"],["graficos","Gráficos"],["cheques","Cheques"]];
   const subnav = LEITE_ABAS.map(([k,r]) => `<a data-lab="${k}" class="${k===leiteAba?"ativo":""}">${r}</a>`).join("");
   $("#view-leite").innerHTML = `<div class="subnav">${subnav}</div><div id="leite-corpo"></div>`;
@@ -1306,6 +1307,16 @@ function renderRecebimento(){
 function vencimentoDe(r){
   const f = state.fornecedores.find(x=>x.id===r.fornecedor_id);
   return addDias(r.data, f ? (Number(f.prazo_pagamento)||30) : 30);
+}
+
+function estaFechado(r){ return r.ciclo_fechado === true; }
+function autoFecharCiclos(){
+  const hj = hoje();
+  const paraFechar = state.recebimentos.filter(r => !r.pago && r.ciclo_fechado !== true && r.ciclo_fechado !== false && vencimentoDe(r) <= hj);
+  if(!paraFechar.length) return;
+  paraFechar.forEach(r => r.ciclo_fechado = true);
+  const ids = paraFechar.map(r=>r.id);
+  sb.from("recebimentos_leite").update({ ciclo_fechado:true }).in("id", ids).then(()=>{}, ()=>{});
 }
 
 function renderLeiteAPagar(corpo){
@@ -1335,36 +1346,53 @@ function renderLeiteAPagar(corpo){
     </div>
     <div class="rotulo">A pagar</div>`;
 
-  const chaves = Object.keys(grupos).sort((a,b)=> grupos[a].venc.localeCompare(grupos[b].venc));
+  // ordenar: quem tem ciclo fechado (vencido) primeiro
+  const chaves = Object.keys(grupos).sort((a,b)=>{
+    const fa = grupos[a].itens.some(estaFechado) ? 0 : 1;
+    const fb = grupos[b].itens.some(estaFechado) ? 0 : 1;
+    if(fa !== fb) return fa - fb;
+    return grupos[a].venc.localeCompare(grupos[b].venc);
+  });
   if(!chaves.length){
     html += vazioCad("Toque no <b>+</b> pra lançar uma entrega:<br>fornecedor, data e litros. O preço é calculado sozinho.");
   } else {
     html += chaves.map(k => {
       const g = grupos[k];
-      const dias = diffDias(g.venc);
-      const vencido = dias <= 0;
-      const quando = vencido ? (dias===0 ? "vence hoje" : `venceu ${dataBR(g.venc)}`) : `próx. ${dataBR(g.venc)}`;
-      const nLanc = g.itens.length;
-      const det = nLanc === 1
-        ? `${dataBR(g.itens[0].data)} · ${num(g.itens[0].litros)} L × ${brl(g.itens[0].preco_litro)}/L`
-        : `${nLanc} lançamentos · ${num(g.litros)} L`;
-      return `<div class="tipo ${vencido?"vencido":""}" data-grupo="${k}">
+      const fechados = g.itens.filter(estaFechado);
+      const abertos  = g.itens.filter(r => !estaFechado(r));
+      const vF = fechados.reduce((s,r)=>s+(Number(r.valor_total)||0),0);
+      const lF = fechados.reduce((s,r)=>s+(Number(r.litros)||0),0);
+      const vA = abertos.reduce((s,r)=>s+(Number(r.valor_total)||0),0);
+      const lA = abertos.reduce((s,r)=>s+(Number(r.litros)||0),0);
+      const vencF = fechados.length ? fechados.map(vencimentoDe).sort().slice(-1)[0] : null;
+      const vencA = abertos.length  ? abertos.map(vencimentoDe).sort()[0] : null;
+
+      if(fechados.length){
+        return `<div class="tipo vencido" data-grupo="${k}">
+          <div>
+            <div class="nome"><button class="mini-add" data-addforn="${g.fid}">+</button><span class="link-forn" data-fdet="${g.fid}">${esc(nomeForn(g.fid))}</span> <span class="pill-venc on">CICLO FECHADO</span></div>
+            <div class="det">${fechados.length} lançamentos · ${num(lF)} L · venceu ${dataBR(vencF)}${abertos.length?`<br><span style="color:var(--verde)">● ciclo novo: ${brl(vA)} · ${abertos.length} lanç. (próx. ${dataBR(vencA)})</span>`:""}</div>
+          </div>
+          <div style="text-align:right">
+            <div class="preco">${brl(vF)}</div>
+            <button class="btn-pago" data-pagociclo="${k}">Pagar ciclo</button>
+          </div>
+        </div>`;
+      }
+      return `<div class="tipo" data-grupo="${k}">
         <div>
-          <div class="nome"><button class="mini-add" data-addforn="${g.fid}">+</button><span class="link-forn" data-fdet="${g.fid}">${esc(nomeForn(g.fid))}</span> <span class="pill-venc ${vencido?"on":""}" data-prazoforn="${g.fid}">${quando}</span></div>
-          <div class="det">${det}</div>
+          <div class="nome"><button class="mini-add" data-addforn="${g.fid}">+</button><span class="link-forn" data-fdet="${g.fid}">${esc(nomeForn(g.fid))}</span> <span class="pill-venc" data-prazoforn="${g.fid}">próx. ${dataBR(vencA)}</span></div>
+          <div class="det">${abertos.length} lançamento${abertos.length>1?"s":""} · ${num(lA)} L</div>
         </div>
-        <div style="text-align:right">
-          <div class="preco">${brl(g.valor)}</div>
-          ${vencido?`<button class="btn-pago" data-pagogrupo="${k}">Pagar tudo</button>`:""}
-        </div>
+        <div style="text-align:right"><div class="preco">${brl(vA)}</div></div>
       </div>`;
     }).join("");
   }
   corpo.innerHTML = html;
   const G = grupos;
   $$("#leite-corpo [data-grupo]").forEach(el => el.onclick = () => abrirGrupoRecebimentos(G[el.dataset.grupo]));
-  $$("#leite-corpo [data-pagogrupo]").forEach(b => b.onclick = (e) => {
-    e.stopPropagation(); marcarPagoGrupo(G[b.dataset.pagogrupo].itens.map(r=>r.id));
+  $$("#leite-corpo [data-pagociclo]").forEach(b => b.onclick = (e) => {
+    e.stopPropagation(); marcarPagoGrupo(G[b.dataset.pagociclo].itens.filter(estaFechado).map(r=>r.id));
   });
   $$("#leite-corpo [data-fdet]").forEach(s => s.onclick = (e) => { e.stopPropagation(); abrirDetalheFornecedor(s.dataset.fdet); });
   $$("#leite-corpo [data-addforn]").forEach(b => b.onclick = (e) => { e.stopPropagation(); abrirModalRecebimento(undefined, b.dataset.addforn); });
@@ -1400,17 +1428,24 @@ function abrirGrupoRecebimentos(g){
     </div>${filhos}`;
   }).join("");
   const temTel = soDigitos((state.fornecedores.find(x=>x.id===g.fid)||{}).telefone);
-  const aberto = g.itens.some(r => !r.pago);
+  const fechados = g.itens.filter(r => r.ciclo_fechado === true && !r.pago);
+  const abertos  = g.itens.filter(r => r.ciclo_fechado !== true && !r.pago);
   abrirFolha(`
     <h2>${esc(nomeForn(g.fid))}</h2>
-    <p class="dica" style="margin-top:-6px">Vencimento ${dataBR(g.venc)} · ${g.itens.length} lançamentos · ${num(g.litros)} L — total <b>${brl(g.valor)}</b></p>
-    ${temTel?`<button class="btn btn-whats" id="grupo-whats">${iconeWhats()} Enviar acerto no WhatsApp</button>`:`<p class="dica">Cadastre o telefone do fornecedor pra enviar por WhatsApp.</p>`}
-    ${aberto?`<button class="btn btn-primario" id="grupo-fechar" style="background:var(--verde);margin-bottom:12px">🔒 Fechar ciclo agora</button>`:""}
+    <p class="dica" style="margin-top:-6px">${g.itens.length} lançamentos · ${num(g.litros)} L — total <b>${brl(g.valor)}</b></p>
+    ${temTel?`<button class="btn btn-whats" id="grupo-whats">${iconeWhats()} Enviar acerto no WhatsApp</button>`:""}
+    ${fechados.length?`<button class="btn btn-primario" id="grupo-pagar" style="margin-bottom:6px">💵 Pagar ciclo fechado (${brl(fechados.reduce((s,r)=>s+(Number(r.valor_total)||0),0))})</button>
+      <button class="btn btn-fantasma" id="grupo-reabrir" style="margin-bottom:12px">↩︎ Reabrir ciclo</button>`:""}
+    ${abertos.length?`<button class="btn btn-primario" id="grupo-fechar" style="background:var(--verde);margin-bottom:12px">🔒 Fechar ciclo agora</button>`:""}
     <div class="rotulo">Entregas por dia</div>
-    <div style="max-height:38vh;overflow-y:auto" id="grupo-lista">${linhas}</div>
+    <div style="max-height:36vh;overflow-y:auto" id="grupo-lista">${linhas}</div>
     <p class="dica">Lápis edita, lixeira apaga (pede senha). Toque no dia pra recolher.</p>`);
   if(temTel) $("#grupo-whats").onclick = () => mensagemFornecedor(g.fid, g.itens, dataBR(g.venc));
-  if(aberto) $("#grupo-fechar").onclick = () => fecharCicloFornecedor(g.fid, g.itens.filter(r=>!r.pago).map(r=>r.id));
+  if(fechados.length){
+    $("#grupo-pagar").onclick = () => marcarPagoGrupo(fechados.map(r=>r.id));
+    $("#grupo-reabrir").onclick = () => confirmarComSenha(`Reabrir o ciclo fechado de ${esc(nomeForn(g.fid))}?`, () => reabrirCiclo(g.fid, fechados.map(r=>r.id)));
+  }
+  if(abertos.length) $("#grupo-fechar").onclick = () => fecharCicloFornecedor(g.fid, abertos.map(r=>r.id));
   $$("#grupo-lista [data-dia]").forEach(el => {
     el.onclick = () => {
       let n = el.nextElementSibling;
@@ -1426,43 +1461,49 @@ function abrirGrupoRecebimentos(g){
 
 function fecharCicloFornecedor(fid, ids){
   const f = state.fornecedores.find(x=>x.id===fid);
-  const itens = state.recebimentos.filter(r => ids.includes(r.id) && !r.pago);
+  const itens = state.recebimentos.filter(r => ids.includes(r.id) && !r.pago && !estaFechado(r));
   if(!f || !itens.length){ toast("Nada aberto pra fechar.", true); return; }
   const total = itens.reduce((s,r)=> s+(Number(r.valor_total)||0),0);
   const litros = itens.reduce((s,r)=> s+(Number(r.litros)||0),0);
   abrirFolha(`
     <h2>Fechar ciclo agora</h2>
-    <p class="dica" style="margin-top:-6px">Fecha as <b>${itens.length} entregas abertas</b> de ${esc(f.nome)} (${num(litros)} L — <b>${brl(total)}</b>) e começa um ciclo novo daqui pra frente. Elas vão pro histórico como acertadas.</p>
+    <p class="dica" style="margin-top:-6px">Fecha o ciclo aberto de ${esc(f.nome)}: <b>${itens.length} lançamentos</b> · ${num(litros)} L · <b>${brl(total)}</b>. Vira valor fechado pra pagar; entregas novas começam um ciclo novo.</p>
     <div class="campo"><label>Prazo do próximo ciclo (dias)</label><input id="fc-prazo" type="number" inputmode="numeric" min="1" value="${f.prazo_pagamento||30}"></div>
-    <p class="dica" style="margin-top:-6px">Deixe igual pra manter, ou mude pra valer no próximo ciclo.</p>
+    <p class="dica" style="margin-top:-6px">Deixe igual pra manter, ou mude pro próximo ciclo.</p>
     <div class="campo"><label>Senha da sua conta</label><input id="fc-senha" type="password" autocomplete="current-password" placeholder="••••••••"></div>
     <div class="erro" id="fc-erro"></div>
-    <button class="btn btn-primario" id="fc-ok" style="background:var(--verde)">Fechar e iniciar novo ciclo</button>`);
+    <button class="btn btn-primario" id="fc-ok" style="background:var(--verde)">Fechar ciclo e iniciar novo</button>`);
   $("#fc-ok").onclick = async () => {
     const senha = $("#fc-senha").value;
     if(!senha){ $("#fc-erro").textContent = "Digite sua senha."; return; }
     const novoPrazo = Math.max(1, parseInt($("#fc-prazo").value)||(f.prazo_pagamento||30));
     $("#fc-ok").disabled = true; $("#fc-ok").textContent = "Verificando…";
     const { error: authErr } = await sb.auth.signInWithPassword({ email: sessao?.user?.email, password: senha });
-    if(authErr){ $("#fc-erro").textContent = "Senha incorreta."; $("#fc-ok").disabled = false; $("#fc-ok").textContent = "Fechar e iniciar novo ciclo"; return; }
-    const em = hoje();
+    if(authErr){ $("#fc-erro").textContent = "Senha incorreta."; $("#fc-ok").disabled = false; $("#fc-ok").textContent = "Fechar ciclo e iniciar novo"; return; }
     const ids2 = itens.map(r=>r.id);
-    const bak = itens.map(r=>({ id:r.id, pago:r.pago, pago_em:r.pago_em }));
     const prazoBak = f.prazo_pagamento;
-    itens.forEach(r => { r.pago = true; r.pago_em = em; });
+    itens.forEach(r => { r.ciclo_fechado = true; });
     f.prazo_pagamento = novoPrazo;
     fecharModal(); renderRecebimento(); toast("Ciclo fechado. Novo ciclo começou. ✅");
-    const { error: e1 } = await sb.from("recebimentos_leite").update({ pago:true, pago_em:em }).in("id", ids2);
+    const { error: e1 } = await sb.from("recebimentos_leite").update({ ciclo_fechado:true }).in("id", ids2);
     const { error: e2 } = await sb.from("fornecedores").update({ prazo_pagamento:novoPrazo }).eq("id", fid);
     if(e1 || e2){
-      bak.forEach(b => { const r = state.recebimentos.find(x=>x.id===b.id); if(r){ r.pago=b.pago; r.pago_em=b.pago_em; } });
+      itens.forEach(r => { r.ciclo_fechado = false; });
       f.prazo_pagamento = prazoBak; renderRecebimento();
       toast("Erro ao fechar o ciclo: "+((e1||e2).message||"?"), true);
     }
   };
 }
 
-function fecharCicloFornecedor_end(){}
+async function reabrirCiclo(fid, ids){
+  const itens = state.recebimentos.filter(r => ids.includes(r.id) && r.ciclo_fechado === true && !r.pago);
+  if(!itens.length){ toast("Nada pra reabrir.", true); return; }
+  itens.forEach(r => r.ciclo_fechado = false);
+  fecharModal(); renderRecebimento(); toast("Ciclo reaberto.");
+  const { error } = await sb.from("recebimentos_leite").update({ ciclo_fechado:false }).in("id", itens.map(r=>r.id));
+  if(error){ itens.forEach(r => r.ciclo_fechado = true); renderRecebimento(); toast("Erro ao reabrir: "+(error.message||"?"), true); }
+}
+
 async function marcarPagoGrupo(ids){
   const alvo = state.recebimentos.filter(r => ids.includes(r.id));
   if(!alvo.length) return;
