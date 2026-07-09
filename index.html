@@ -236,6 +236,18 @@ body.leitura .cheque-card .nome, body.leitura .cheque-card .det, body.leitura .c
 .cfg-aba{display:flex;align-items:center;gap:10px;padding:9px 4px;font-weight:600;border-bottom:1px solid var(--linha)}
 .cfg-aba input{width:20px;height:20px;accent-color:var(--ouro)}
 .icone-btn.leitura-on{ color:var(--vermelho) }
+.fab-ia{position:fixed;right:16px;bottom:150px;width:52px;height:52px;border-radius:50%;background:var(--tinta);color:#fff;border:none;display:grid;place-items:center;box-shadow:0 6px 20px rgba(0,0,0,.25);cursor:pointer;z-index:40}
+body.leitura .fab-ia{display:grid}
+.ia-msgs{background:var(--fundo);border:1px solid var(--linha);border-radius:12px;padding:10px;height:44vh;overflow-y:auto;display:flex;flex-direction:column;gap:8px;margin-bottom:10px}
+.ia-vazio{color:var(--tinta-mole);font-size:.88rem;text-align:center;margin:auto;padding:20px}
+.ia-msg{max-width:85%;padding:9px 12px;border-radius:14px;font-size:.9rem;line-height:1.4;white-space:pre-wrap;word-break:break-word}
+.ia-msg.user{align-self:flex-end;background:var(--ouro);color:#fff;border-bottom-right-radius:4px}
+.ia-msg.assistant{align-self:flex-start;background:var(--card);border:1px solid var(--linha);border-bottom-left-radius:4px}
+.ia-entrada{display:flex;gap:8px}
+.ia-entrada input{flex:1;padding:12px 14px;border:1px solid var(--linha-forte);border-radius:12px;font-size:1rem;font-family:inherit;background:var(--card)}
+.ia-btn-enviar{width:48px;border:none;border-radius:12px;background:var(--ouro);color:#fff;font-size:1.2rem;cursor:pointer}
+.ia-sugestoes{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+.ia-sug{background:var(--card);border:1px solid var(--linha);border-radius:20px;padding:6px 12px;font-size:.78rem;font-family:inherit;cursor:pointer;color:var(--tinta)}
 .alerta-ciclo{background:#fdeceb;border:1.5px solid var(--vermelho);border-radius:var(--r);padding:13px 15px;margin-bottom:14px;cursor:pointer;box-shadow:var(--sombra)}
 .cf-lista{margin-top:8px}
 .cf-linha{display:flex;justify-content:space-between;font-size:.86rem;padding:3px 0;color:var(--tinta)}
@@ -384,6 +396,10 @@ body.leitura .cheque-card .nome, body.leitura .cheque-card .det, body.leitura .c
     <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
   </button>
 
+  <button class="fab-ia" id="fab-ia" title="Assistente">
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+  </button>
+
   <nav class="nav">
     <a data-nav="inicio" class="ativo">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V20a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V9.5"/></svg>
@@ -422,7 +438,7 @@ body.leitura .cheque-card .nome, body.leitura .cheque-card .det, body.leitura .c
    ======================================================================= */
 const SUPABASE_URL      = "https://cadnmgaymgljmoadebkk.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uBKKvD_e5ef4326TvkFgcg_rRnjmTus";
-const APP_VER = "v64";
+const APP_VER = "v65";
 const SPLASH_MIN = 2400;
 const EMAIL_ADMIN = "jpferreira1356@icloud.com";
 const splashT0 = Date.now();                              // suba junto com o cache do sw.js
@@ -517,6 +533,91 @@ function toast(msg, erro=false){
   const t = $("#toast"); t.textContent = msg;
   t.className = "ver" + (erro ? " erro-t" : "");
   clearTimeout(toastT); toastT = setTimeout(()=> t.className = "", 2600);
+}
+
+/* ===================== ASSISTENTE (IA) ===================== */
+let iaHist = [];   // {role, content}
+function contextoQueijaria(){
+  const mes = mesAtual();
+  const litrosMes = state.recebimentos.filter(r=>(r.data||"").slice(0,7)===mes).reduce((a,r)=>a+(Number(r.litros)||0),0);
+  const aPagarFornecedores = {};
+  state.recebimentos.filter(r=>!r.pago).forEach(r=>{
+    const n = nomeForn(r.fornecedor_id);
+    if(!aPagarFornecedores[n]) aPagarFornecedores[n] = { litros:0, valor:0, fechado:0 };
+    aPagarFornecedores[n].litros += Number(r.litros)||0;
+    aPagarFornecedores[n].valor  += Number(r.valor_total)||0;
+    if(r.ciclo_fechado===true) aPagarFornecedores[n].fechado += Number(r.valor_total)||0;
+  });
+  const chequesPend = state.cheques.filter(c=>!c.compensado);
+  const totalChqPend = chequesPend.reduce((a,c)=>a+(Number(c.valor)||0),0);
+  const chqAtrasados = chequesPend.filter(c=>diffDias(bomParaDe(c))<=0);
+  const vendasMes = state.vendas.filter(v=>(v.data||"").slice(0,7)===mes).reduce((a,v)=>a+(Number(v.valor_total)||0),0);
+
+  const forn = Object.keys(aPagarFornecedores).map(n=>{
+    const f=aPagarFornecedores[n];
+    return `- ${n}: ${num(f.litros)} L, a pagar ${brl(f.valor)}${f.fechado>0?` (ciclo fechado ${brl(f.fechado)})`:""}`;
+  }).join("\n");
+  const chqLista = chequesPend.slice(0,20).map(c=>`- ${c.para||"?"}: ${brl(c.valor)}, cai ${dataBR(bomParaDe(c))}${diffDias(bomParaDe(c))<=0?" (ATRASADO)":""}`).join("\n");
+
+  return `Você é o assistente da Queijaria Bene, um laticínio. Responda em português do Brasil, de forma curta, clara e prática. Use os dados abaixo pra responder sobre leite, fornecedores, pagamentos e cheques. Valores em reais.
+
+RESUMO ATUAL (${dataBR(hoje())}):
+- Litros de leite recebidos no mês: ${num(litrosMes)} L
+- Vendas no mês: ${brl(vendasMes)}
+- Total em cheques pendentes: ${brl(totalChqPend)} (${chequesPend.length} cheques, ${chqAtrasados.length} atrasados)
+
+FORNECEDORES A PAGAR:
+${forn||"- nenhum pendente"}
+
+CHEQUES PENDENTES:
+${chqLista||"- nenhum"}
+
+Se te perguntarem algo fora desses dados, responda com bom senso mas avise que não tem essa informação no app.`;
+}
+
+function abrirChatIA(){
+  abrirFolha(`
+    <h2>Assistente 🧀</h2>
+    <p class="dica" style="margin-top:-6px">Pergunte sobre leite, fornecedores, pagamentos, cheques…</p>
+    <div id="ia-msgs" class="ia-msgs"></div>
+    <div class="ia-entrada">
+      <input id="ia-input" placeholder="Ex.: quanto tenho a pagar essa semana?" autocomplete="off">
+      <button id="ia-enviar" class="ia-btn-enviar">➤</button>
+    </div>
+    <div class="ia-sugestoes">
+      <button class="ia-sug" data-sug="Quanto tenho a pagar de leite no total?">💰 Total a pagar</button>
+      <button class="ia-sug" data-sug="Quais cheques vão vencer essa semana?">📝 Cheques da semana</button>
+      <button class="ia-sug" data-sug="Qual fornecedor trouxe mais leite esse mês?">🥛 Maior fornecedor</button>
+    </div>`);
+  pintarChat();
+  $("#ia-enviar").onclick = enviarIA;
+  $("#ia-input").addEventListener("keydown", e => { if(e.key==="Enter") enviarIA(); });
+  $$(".ia-sug").forEach(b => b.onclick = () => { $("#ia-input").value = b.dataset.sug; enviarIA(); });
+}
+function pintarChat(){
+  const box = $("#ia-msgs"); if(!box) return;
+  if(!iaHist.length){ box.innerHTML = `<div class="ia-vazio">Oi! Sou o assistente da Queijaria Bene. Como posso ajudar?</div>`; return; }
+  box.innerHTML = iaHist.map(m => `<div class="ia-msg ${m.role}">${esc(m.content).replace(/\n/g,"<br>")}</div>`).join("");
+  box.scrollTop = box.scrollHeight;
+}
+async function enviarIA(){
+  const inp = $("#ia-input"); const texto = (inp.value||"").trim();
+  if(!texto) return;
+  inp.value = "";
+  iaHist.push({ role:"user", content:texto });
+  iaHist.push({ role:"assistant", content:"…" });
+  pintarChat();
+  try {
+    const { data, error } = await sb.functions.invoke("ai-chat", {
+      body: { system: contextoQueijaria(), messages: iaHist.filter(m=>m.content!=="…") }
+    });
+    if(error) throw error;
+    const resposta = (data && (data.reply || data.text || data.content)) || "Não consegui responder agora.";
+    iaHist[iaHist.length-1] = { role:"assistant", content:resposta };
+  } catch(e){
+    iaHist[iaHist.length-1] = { role:"assistant", content:"Ops, não consegui responder. Verifique a conexão ou tente de novo." };
+  }
+  pintarChat();
 }
 
 /* ===================== boot ===================== */
@@ -780,6 +881,7 @@ async function abrirApp(){
   irPara("inicio");
   aplicarAbas();
   atualizarIndicadorFila(); processarFila();
+  $("#fab-ia").onclick = abrirChatIA;
   iniciarRealtime();
 }
 
