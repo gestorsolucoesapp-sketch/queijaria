@@ -136,6 +136,12 @@ input,select{font-family:inherit;font-size:16px}
   display:grid;place-items:center;box-shadow:0 6px 20px rgba(217,154,43,.4);z-index:25}
 .fab:active{transform:scale(.94)}
 @media(max-width:556px){.fab{right:18px}}
+.fab-ia{position:fixed;left:calc(50% - 260px + 18px);bottom:calc(90px + env(safe-area-inset-bottom));
+  width:56px;height:56px;border-radius:18px;background:linear-gradient(#f5c542,#e8b230);border:1.5px solid #c9992a;
+  display:grid;place-items:center;box-shadow:0 6px 20px rgba(201,153,42,.4);z-index:25;cursor:pointer}
+.fab-ia:active{transform:scale(.94)}
+@media(max-width:556px){.fab-ia{left:18px}}
+body.leitura .fab-ia{display:none !important}
 
 /* nav inferior */
 .nav{position:fixed;bottom:0;left:0;right:0;z-index:30;background:rgba(255,253,248,.92);
@@ -426,6 +432,18 @@ body.leitura .cheque-card .nome, body.leitura .cheque-card .det, body.leitura .c
     <div id="view-cadastro" class="view hidden"></div>
   </main>
 
+  <button class="fab-ia" id="fab-ia" title="Analista de IA">
+    <svg width="30" height="30" viewBox="0 0 32 32" fill="none" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M4 24 L4 15.5 C4 14.7 4.4 14 5.1 13.6 L26 3.2 C27 2.7 28.2 3.4 28.2 4.6 L28.2 24 Z" fill="#fff3cf" stroke="#a9781f" stroke-width="1.4"/>
+      <path d="M4 15.7 L28.2 13.2" stroke="#a9781f" stroke-width="1.2" fill="none"/>
+      <path d="M4 24 L28.2 24" stroke="#a9781f" stroke-width="1.2" fill="none"/>
+      <circle cx="9" cy="19.5" r="1.9" fill="#d8a531"/>
+      <circle cx="15.5" cy="20.8" r="1.4" fill="#d8a531"/>
+      <circle cx="20.5" cy="18.6" r="2.1" fill="#d8a531"/>
+      <circle cx="24.5" cy="20.5" r="1.1" fill="#d8a531"/>
+      <circle cx="12.5" cy="16.6" r="1" fill="#d8a531"/>
+    </svg>
+  </button>
   <button class="fab" id="fab" title="Novo lote">
     <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
   </button>
@@ -469,7 +487,7 @@ body.leitura .cheque-card .nome, body.leitura .cheque-card .det, body.leitura .c
    ======================================================================= */
 const SUPABASE_URL      = "https://cadnmgaymgljmoadebkk.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uBKKvD_e5ef4326TvkFgcg_rRnjmTus";
-const APP_VER = "v70";
+const APP_VER = "v71";
 const SPLASH_MIN = 2400;
 const EMAIL_ADMIN = "jpferreira1356@icloud.com";
 const splashT0 = Date.now();                              // suba junto com o cache do sw.js
@@ -767,6 +785,7 @@ function traduzErro(m=""){
 $("#btn-sair").onclick = async () => { await sb.auth.signOut(); location.reload(); };
 $("#btn-config").onclick = () => abrirModalConfig();
 $("#btn-ia").onclick = () => abrirChatIA();
+$("#fab-ia").onclick = () => abrirChatIA();
 
 // ===================== ANALISTA DE IA =====================
 let iaHistorico = [];
