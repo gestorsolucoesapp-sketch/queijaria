@@ -416,7 +416,7 @@ body.leitura .cheque-card .nome, body.leitura .cheque-card .det, body.leitura .c
    ======================================================================= */
 const SUPABASE_URL      = "https://cadnmgaymgljmoadebkk.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uBKKvD_e5ef4326TvkFgcg_rRnjmTus";
-const APP_VER = "v59";
+const APP_VER = "v60";
 const SPLASH_MIN = 2400;
 const EMAIL_ADMIN = "jpferreira1356@icloud.com";
 const splashT0 = Date.now();                              // suba junto com o cache do sw.js
@@ -1452,7 +1452,7 @@ function abrirDetalheFornecedor(fid){
   abrirFolha(`
     <h2>${esc(f.nome)}</h2>
     <p class="dica" style="margin-top:-6px">${num(totLitros)} L no total · ${brl(totValor)}</p>
-    ${soDigitos(f.telefone)?`<button class="btn btn-whats" id="det-whats">${iconeWhats()} Enviar acerto no WhatsApp</button>`:""}
+    <button class="btn btn-whats" id="det-whats">${iconeWhats()} Enviar acerto no WhatsApp</button>
     <div class="rotulo">Período de pagamento</div>
     <div class="seg-linha">${segPrazo}</div>
     <div class="rotulo">Litros por dia · cor = ciclo</div>
@@ -1460,7 +1460,7 @@ function abrirDetalheFornecedor(fid){
     <div class="rotulo">Ciclos</div>
     <div style="max-height:34vh;overflow-y:auto">${blocos}</div>`);
 
-  if(soDigitos(f.telefone)) $("#det-whats").onclick = () => mensagemFornecedor(fid, recs, "");
+  $("#det-whats").onclick = () => mensagemFornecedor(fid, recs, "");
   $$(".seg-prazo").forEach(b => b.onclick = () => {
     const novo = parseInt(b.dataset.prazo);
     if(novo === prazo) return;
@@ -1646,14 +1646,14 @@ function abrirGrupoRecebimentos(g){
   abrirFolha(`
     <h2>${esc(nomeForn(g.fid))}</h2>
     <p class="dica" style="margin-top:-6px">${g.itens.length} lançamentos · ${num(g.litros)} L — total <b>${brl(g.valor)}</b></p>
-    ${temTel?`<button class="btn btn-whats" id="grupo-whats">${iconeWhats()} Enviar acerto no WhatsApp</button>`:""}
+    <button class="btn btn-whats" id="grupo-whats">${iconeWhats()} Enviar acerto no WhatsApp</button>
     ${(!soLeitura && fechados.length)?`<button class="btn btn-primario" id="grupo-pagar" style="margin-bottom:6px">💵 Pagar ciclo fechado (${brl(fechados.reduce((s,r)=>s+(Number(r.valor_total)||0),0))})</button>
       <button class="btn btn-fantasma" id="grupo-reabrir" style="margin-bottom:12px">↩︎ Reabrir ciclo</button>`:""}
     ${(!soLeitura && abertos.length)?`<button class="btn btn-primario" id="grupo-fechar" style="background:var(--verde);margin-bottom:12px">🔒 Fechar ciclo agora</button>`:""}
     <div class="rotulo">Entregas por dia</div>
     <div style="max-height:36vh;overflow-y:auto" id="grupo-lista">${linhas}</div>
     <p class="dica">Lápis edita, lixeira apaga (pede senha). Toque no dia pra recolher.</p>`);
-  if(temTel) $("#grupo-whats").onclick = () => mensagemFornecedor(g.fid, g.itens, dataBR(g.venc));
+  $("#grupo-whats").onclick = () => mensagemFornecedor(g.fid, g.itens, dataBR(g.venc));
   if(!soLeitura && fechados.length){
     $("#grupo-pagar").onclick = () => marcarPagoGrupo(fechados.map(r=>r.id));
     $("#grupo-reabrir").onclick = () => confirmarComSenha(`Reabrir o ciclo fechado de ${esc(nomeForn(g.fid))}?`, () => reabrirCiclo(g.fid, fechados.map(r=>r.id)));
@@ -2070,10 +2070,13 @@ function linkWhats(telefone, texto){
   if(n && n.length <= 11) n = "55" + n; // Brasil
   return "https://wa.me/" + n + "?text=" + encodeURIComponent(texto);
 }
+function enviarWhatsTexto(telefone, texto){
+  // com número abre a conversa; sem número abre o WhatsApp pra escolher o contato
+  window.open(linkWhats(telefone, texto), "_blank");
+}
 function mensagemFornecedor(fid, itens, vencTxt){
   const f = state.fornecedores.find(x=>x.id===fid);
   if(!f){ toast("Fornecedor não encontrado.", true); return; }
-  if(!soDigitos(f.telefone)){ toast("Esse fornecedor não tem telefone cadastrado.", true); return; }
   const lista = [...itens].sort((a,b)=> String(a.data).localeCompare(String(b.data)))
     .map(r => `  • ${dataBR(r.data)} — ${num(r.litros)} L × ${brl(r.preco_litro)} = ${brl(r.valor_total)}`);
   const total = itens.reduce((s,r)=> s + (Number(r.valor_total)||0), 0);
@@ -2096,7 +2099,7 @@ function mensagemFornecedor(fid, itens, vencTxt){
   txt += `\n*\u{1F4B0} Total a pagar: ${brl(liquido)}*`;
   if(vencTxt) txt += `\n\u{1F4C5} Pagamento: *${vencTxt}*`;
   txt += `\n\n_Obrigado pela parceria!_ \u{1F42E}`;
-  window.open(linkWhats(f.telefone, txt), "_blank");
+  enviarWhatsTexto(f.telefone, txt);
 }
 
 function bomParaDe(c){ return addDias(c.data, Number(c.prazo_dias)||0); }
