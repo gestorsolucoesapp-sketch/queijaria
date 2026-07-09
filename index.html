@@ -407,7 +407,7 @@ body.leitura .cheque-card .nome, body.leitura .cheque-card .det, body.leitura .c
    ======================================================================= */
 const SUPABASE_URL      = "https://cadnmgaymgljmoadebkk.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uBKKvD_e5ef4326TvkFgcg_rRnjmTus";
-const APP_VER = "v49";
+const APP_VER = "v50";
 const SPLASH_MIN = 2400;
 const EMAIL_ADMIN = "jpferreira1356@icloud.com";
 const splashT0 = Date.now();                              // suba junto com o cache do sw.js
@@ -2499,7 +2499,16 @@ async function salvarLote(){
 
 /* ===================== service worker ===================== */
 if("serviceWorker" in navigator){
-  window.addEventListener("load", () => { navigator.serviceWorker.register("sw.js").catch(()=>{}); });
+  let recarregou = false;
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    if(recarregou) return; recarregou = true; location.reload();
+  });
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("sw.js").then((reg) => {
+      reg.update();
+      setInterval(() => reg.update(), 60*1000);
+    }).catch(()=>{});
+  });
 }
 
 /* start */
