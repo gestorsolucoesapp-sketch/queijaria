@@ -487,7 +487,7 @@ body.leitura .cheque-card .nome, body.leitura .cheque-card .det, body.leitura .c
    ======================================================================= */
 const SUPABASE_URL      = "https://cadnmgaymgljmoadebkk.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uBKKvD_e5ef4326TvkFgcg_rRnjmTus";
-const APP_VER = "v71";
+const APP_VER = "v72";
 const SPLASH_MIN = 2400;
 const EMAIL_ADMIN = "jpferreira1356@icloud.com";
 const splashT0 = Date.now();                              // suba junto com o cache do sw.js
@@ -519,7 +519,7 @@ function setLeitura(v){
   try { localStorage.setItem("modo_leitura", v ? "1" : "0"); } catch(e){}
   aplicarLeitura();
 }
-const state = { tipos: [], lotes: [], fornecedores: [], leiteFaixas: [], insumos: [], config: {}, recebimentos: [], vendas: [], cheques: [], descontos: [] };
+const state = { tipos: [], lotes: [], fornecedores: [], leiteFaixas: [], insumos: [], fornInsumos: [], config: {}, recebimentos: [], vendas: [], cheques: [], descontos: [] };
 
 /* ===================== utilidades ===================== */
 const $  = (s, r=document) => r.querySelector(s);
@@ -976,12 +976,13 @@ function carregarCacheEstado(){ try { const s = JSON.parse(localStorage.getItem(
 async function carregarTudo(){
   if(!navigator.onLine){ carregarCacheEstado(); return; }
   const q = (p) => p.then(r => r.data || []).catch(() => []);
-  const [t, l, f, lf, ins, rec, vds, chq, dsc] = await Promise.all([
+  const [t, l, f, lf, ins, finsu, rec, vds, chq, dsc] = await Promise.all([
     q(sb.from("tipos_queijo").select("*").eq("familia_id", familiaId).order("nome")),
     q(sb.from("lotes").select("*").eq("familia_id", familiaId).order("data_fabricacao", { ascending:false })),
     q(sb.from("fornecedores").select("*").eq("familia_id", familiaId).order("nome")),
     q(sb.from("leite_faixas").select("*").eq("familia_id", familiaId).order("litros_de")),
     q(sb.from("insumos").select("*").eq("familia_id", familiaId).order("nome")),
+    q(sb.from("fornecedores_insumo").select("*").eq("familia_id", familiaId).order("nome")),
     q(sb.from("recebimentos_leite").select("*").eq("familia_id", familiaId).order("data", { ascending:false })),
     q(sb.from("vendas").select("*").eq("familia_id", familiaId).order("data", { ascending:false })),
     q(sb.from("cheques").select("*").eq("familia_id", familiaId).order("data", { ascending:false })),
@@ -989,7 +990,7 @@ async function carregarTudo(){
   ]);
   let cfg = {};
   try { const r = await sb.from("queijaria_config").select("*").eq("familia_id", familiaId).maybeSingle(); cfg = r.data || {}; } catch(e){}
-  state.tipos = t; state.lotes = l; state.fornecedores = f; state.leiteFaixas = lf; state.insumos = ins; state.config = cfg; state.recebimentos = rec; state.vendas = vds; state.cheques = chq; state.descontos = dsc;
+  state.tipos = t; state.lotes = l; state.fornecedores = f; state.leiteFaixas = lf; state.insumos = ins; state.fornInsumos = finsu; state.config = cfg; state.recebimentos = rec; state.vendas = vds; state.cheques = chq; state.descontos = dsc;
   salvarCacheEstado();
 }
 
@@ -1013,7 +1014,7 @@ async function abrirApp(){
 let realtimeCanal = null, realtimeTimer = null;
 function iniciarRealtime(){
   if(realtimeCanal) return;
-  const tabelas = ["recebimentos_leite","vendas","cheques","tipos_queijo","fornecedores","insumos","leite_faixas","lotes","queijaria_config"];
+  const tabelas = ["recebimentos_leite","vendas","cheques","tipos_queijo","fornecedores","fornecedores_insumo","insumos","leite_faixas","lotes","queijaria_config"];
   realtimeCanal = sb.channel("queijaria-" + familiaId);
   tabelas.forEach(t => realtimeCanal.on("postgres_changes",
     { event: "*", schema: "public", table: t, filter: "familia_id=eq." + familiaId },
@@ -1406,7 +1407,7 @@ async function comecarDoZero(){
     $("#cfg-zerar").disabled = false; $("#cfg-zerar").textContent = "Começar do zero"; return;
   }
   $("#cfg-zerar").textContent = "Apagando…";
-  const tabelas = ["recebimentos_leite","cheques","vendas","lotes","insumos","leite_faixas","fornecedores","tipos_queijo","queijaria_config"];
+  const tabelas = ["recebimentos_leite","cheques","vendas","lotes","insumos","leite_faixas","fornecedores","fornecedores_insumo","tipos_queijo","queijaria_config"];
   const erros = [];
   for(const t of tabelas){
     try{ const { error } = await sb.from(t).delete().eq("familia_id", familiaId); if(error) erros.push(t); }
@@ -2578,7 +2579,7 @@ async function excluirCheque(id){
 
 /* ===================== render: CADASTRO ===================== */
 let cadAba = "fornecedores";
-const CAD_ABAS = [["fornecedores","Fornec."],["leite","Leite"],["queijos","Queijos"],["insumos","Insumos"],["catalogo","Catálogo"]];
+const CAD_ABAS = [["fornecedores","Fornec."],["leite","Leite"],["queijos","Queijos"],["insumos","Insumos"],["finsumo","F. Insumo"],["catalogo","Catálogo"]];
 
 function prazoRot(d){ d = Number(d)||0; return d === 1 ? "1 dia" : `${d} dias`; }
 function ordenarPorNome(arr){ arr.sort((a,b)=>String(a.nome||"").localeCompare(String(b.nome||""))); }
@@ -2599,6 +2600,7 @@ function renderCadastro(){
   else if(cadAba === "leite")   renderLeite(corpo);
   else if(cadAba === "queijos") renderQueijos(corpo);
   else if(cadAba === "insumos") renderInsumos(corpo);
+  else if(cadAba === "finsumo") renderFornInsumos(corpo);
   else if(cadAba === "catalogo") renderCatalogo(corpo);
 }
 
@@ -2697,7 +2699,7 @@ function renderInsumos(corpo){
     html += vazioCad("Ex.: sal, coalho, fermento — com preço,<br>quantidade, marca e fornecedor.");
   } else {
     html += state.insumos.map(i => {
-      const forn = state.fornecedores.find(f=>f.id===i.fornecedor_id);
+      const forn = (state.fornInsumos||[]).find(f=>f.id===i.fornecedor_insumo_id);
       const det = [i.marca&&esc(i.marca), i.quantidade!=null&&`${num(i.quantidade,2)} ${esc(i.unidade||"")}`.trim(), forn&&esc(forn.nome)].filter(Boolean).join(" · ") || "—";
       return `<div class="tipo" data-insumo="${i.id}">
         <div><div class="nome">${esc(i.nome)}</div><div class="det">${det}</div></div>
@@ -2970,7 +2972,7 @@ function abrirModalInsumo(id){
   if(bloqueiaLeitura()) return;
   if(typeof id !== "string") id = undefined;
   const i = state.insumos.find(x=>x.id===id) || {};
-  const opts = `<option value="">— sem fornecedor —</option>` + state.fornecedores.map(f=>`<option value="${f.id}" ${i.fornecedor_id===f.id?"selected":""}>${esc(f.nome)}</option>`).join("");
+  const opts = `<option value="">— sem fornecedor —</option>` + (state.fornInsumos||[]).map(f=>`<option value="${f.id}" ${i.fornecedor_insumo_id===f.id?"selected":""}>${esc(f.nome)}</option>`).join("");
   abrirFolha(`
     <h2>${id?"Editar":"Novo"} insumo</h2>
     <div class="campo"><label>Nome</label><input id="i-nome" value="${esc(i.nome||"")}" placeholder="Ex.: Sal refinado"></div>
@@ -2982,12 +2984,14 @@ function abrirModalInsumo(id){
       <div class="campo"><label>Quantidade</label><input id="i-qtd" type="number" inputmode="decimal" value="${i.quantidade??""}"></div>
       <div class="campo"><label>Unidade</label><input id="i-unid" value="${esc(i.unidade||"")}" placeholder="kg, L, un"></div>
     </div>
-    <div class="campo"><label>Fornecedor</label><select id="i-forn">${opts}</select></div>
+    <div class="campo"><label>Fornecedor do insumo</label><select id="i-forn">${opts}</select>
+      <button type="button" class="btn btn-fantasma" id="i-novo-forn" style="margin-top:6px;font-size:.82rem">+ Cadastrar fornecedor de insumo</button></div>
     ${campoCodigoBarras("i-cb","i-scan",i.codigo_barras)}
     <div class="erro" id="i-erro"></div>
     <button class="btn btn-primario" id="i-salvar">Salvar</button>
     ${botaoExcluir(id?"i-excluir":"","Excluir insumo")}`);
   $("#i-scan").onclick = () => abrirScanner(c => { $("#i-cb").value = c; toast("Código lido: "+c); });
+  $("#i-novo-forn").onclick = () => abrirModalFornInsumo();
   $("#i-salvar").onclick = () => salvarInsumo(id);
   if(id) $("#i-excluir").onclick = () => excluirInsumo(id);
 }
@@ -2999,7 +3003,7 @@ async function salvarInsumo(id){
     preco: parseFloat($("#i-preco").value)||0,
     quantidade: parseFloat($("#i-qtd").value)||null,
     unidade: $("#i-unid").value.trim()||null,
-    fornecedor_id: $("#i-forn").value || null,
+    fornecedor_insumo_id: $("#i-forn").value || null,
     codigo_barras: $("#i-cb").value.trim() || null
   };
   if(id){
@@ -3021,6 +3025,80 @@ async function excluirInsumo(id){
   fecharModal(); renderCadastro(); toast("Insumo excluído.");
   const { error } = await dbw("insumos").delete().eq("id", id);
   if(error){ state.insumos = bak; renderCadastro(); toast("Não deu pra excluir.", true); }
+}
+
+/* ---------- Fornecedores de INSUMO (separado dos produtores de leite) ---------- */
+function renderFornInsumos(corpo){
+  const lista = state.fornInsumos || [];
+  let html = `<div class="rotulo">Fornecedores de insumo</div>
+    <p class="dica" style="margin:-4px 0 10px">Quem vende sal, coalho, fermento, embalagem… (não é produtor de leite).</p>`;
+  if(!lista.length){
+    html += vazioCad("Ex.: distribuidora de sal, loja de embalagens,<br>fornecedor de coalho e fermento.");
+  } else {
+    html += lista.map(f => {
+      const det = [f.cidade&&esc(f.cidade), f.telefone&&esc(f.telefone)].filter(Boolean).join(" · ") || "—";
+      return `<div class="tipo" data-finsumo="${f.id}">
+        <div><div class="nome">${esc(f.nome)}</div><div class="det">${det}</div></div>
+      </div>`;
+    }).join("");
+  }
+  html += botaoNovo("btn-novo-finsumo","Novo fornecedor de insumo");
+  corpo.innerHTML = html;
+  $("#btn-novo-finsumo").onclick = () => abrirModalFornInsumo();
+  $$("#cad-corpo [data-finsumo]").forEach(el => el.onclick = () => abrirModalFornInsumo(el.dataset.finsumo));
+}
+
+function abrirModalFornInsumo(id){
+  if(bloqueiaLeitura()) return;
+  if(typeof id !== "string") id = undefined;
+  const f = (state.fornInsumos||[]).find(x=>x.id===id) || {};
+  abrirFolha(`
+    <h2>${id?"Editar":"Novo"} fornecedor de insumo</h2>
+    <div class="campo"><label>Nome</label><input id="fi-nome" value="${esc(f.nome||"")}" placeholder="Ex.: Distribuidora de Sal SJRP"></div>
+    <div class="linha-campos">
+      <div class="campo"><label>Cidade</label><input id="fi-cidade" value="${esc(f.cidade||"")}" placeholder="São José do Rio Pardo"></div>
+      <div class="campo"><label>Estado</label><input id="fi-estado" maxlength="2" value="${esc(f.estado||"")}" placeholder="SP" style="text-transform:uppercase"></div>
+    </div>
+    <div class="campo"><label>Telefone / WhatsApp</label>
+      <input id="fi-tel" type="tel" inputmode="tel" value="${esc(f.telefone||"")}" placeholder="(19) 99999-9999"></div>
+    <div class="erro" id="fi-erro"></div>
+    <button class="btn btn-primario" id="fi-salvar">Salvar</button>
+    ${botaoExcluir(id?"fi-excluir":"","Excluir fornecedor")}`);
+  $("#fi-salvar").onclick = () => salvarFornInsumo(id);
+  if(id) $("#fi-excluir").onclick = () => excluirFornInsumo(id);
+}
+
+async function salvarFornInsumo(id){
+  const nome = $("#fi-nome").value.trim();
+  if(!nome){ $("#fi-erro").textContent = "Dê um nome ao fornecedor."; return; }
+  const dados = {
+    nome,
+    cidade: $("#fi-cidade").value.trim()||null,
+    estado: ($("#fi-estado").value.trim().toUpperCase())||null,
+    telefone: $("#fi-tel").value.trim()||null
+  };
+  if(!state.fornInsumos) state.fornInsumos = [];
+  if(id){
+    const f = state.fornInsumos.find(x=>x.id===id);
+    if(!f){ fecharModal(); toast("Registro não encontrado. Recarregue o app.", true); return; }
+    const bak = {...f}; Object.assign(f, dados);
+    ordenarPorNome(state.fornInsumos); fecharModal(); renderCadastro(); toast("Fornecedor atualizado.");
+    const { error } = await dbw("fornecedores_insumo").update(dados).eq("id", id);
+    if(error){ Object.assign(f, bak); renderCadastro(); toast("Não deu pra salvar.", true); }
+  } else {
+    const novo = { id:uid(), familia_id:familiaId, ...dados };
+    state.fornInsumos.push(novo); ordenarPorNome(state.fornInsumos); fecharModal(); renderCadastro(); toast("Fornecedor de insumo cadastrado.");
+    const { error } = await dbw("fornecedores_insumo").insert(novo);
+    if(error){ state.fornInsumos = state.fornInsumos.filter(x=>x.id!==novo.id); renderCadastro(); toast("Não deu pra salvar.", true); }
+  }
+}
+
+async function excluirFornInsumo(id){
+  const bak = state.fornInsumos;
+  state.fornInsumos = state.fornInsumos.filter(x=>x.id!==id);
+  fecharModal(); renderCadastro(); toast("Fornecedor excluído.");
+  const { error } = await dbw("fornecedores_insumo").delete().eq("id", id);
+  if(error){ state.fornInsumos = bak; renderCadastro(); toast("Não deu pra excluir.", true); }
 }
 
 function abrirModalLote(){
