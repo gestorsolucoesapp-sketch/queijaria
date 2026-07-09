@@ -225,6 +225,8 @@ body.leitura .btn-scan,
 body.leitura #btn-config{ display:none !important; }
 body.leitura .cheque-card{ pointer-events:none }
 body.leitura .cheque-card .nome, body.leitura .cheque-card .det, body.leitura .cheque-card .preco{ pointer-events:auto }
+.cfg-aba{display:flex;align-items:center;gap:10px;padding:9px 4px;font-weight:600;border-bottom:1px solid var(--linha)}
+.cfg-aba input{width:20px;height:20px;accent-color:var(--ouro)}
 .icone-btn.leitura-on{ color:var(--vermelho) }
 .alerta-cheque{display:flex;align-items:center;gap:12px;background:#fdeceb;border:1.5px solid var(--vermelho);border-radius:var(--r);padding:13px 15px;margin-bottom:14px;cursor:pointer;box-shadow:var(--sombra)}
 .alerta-cheque .ac-ic{font-size:1.5rem;flex:none}
@@ -407,7 +409,7 @@ body.leitura .cheque-card .nome, body.leitura .cheque-card .det, body.leitura .c
    ======================================================================= */
 const SUPABASE_URL      = "https://cadnmgaymgljmoadebkk.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uBKKvD_e5ef4326TvkFgcg_rRnjmTus";
-const APP_VER = "v52";
+const APP_VER = "v53";
 const SPLASH_MIN = 2400;
 const EMAIL_ADMIN = "jpferreira1356@icloud.com";
 const splashT0 = Date.now();                              // suba junto com o cache do sw.js
@@ -684,6 +686,7 @@ async function abrirApp(){
   await carregarTudo();
   aplicarLeitura();
   irPara("inicio");
+  aplicarAbas();
   iniciarRealtime();
 }
 
@@ -706,6 +709,7 @@ function agendarSync(){
   realtimeTimer = setTimeout(async () => {
     if(document.querySelector(".overlay")) return; // não recarrega com um modal aberto
     await carregarTudo();
+    aplicarLeitura(); aplicarAbas();
     const p = paginaAtual();
     if(p === "inicio") renderInicio();
     else if(p === "producao") renderProducao();
@@ -900,18 +904,61 @@ function renderProducao(){
 
 /* ===================== CONFIGURAÇÕES ===================== */
 function ehAdmin(){ return (sessao?.user?.email || "").toLowerCase() === EMAIL_ADMIN; }
+const TODAS_ABAS = [["inicio","Início"],["producao","Produção"],["leite","Leite"],["vendas","Vendas"],["cheques","Cheques"],["cadastro","Cadastro"]];
+function abasVisiveisSet(){
+  const raw = (state.config && state.config.abas_visiveis) || "";
+  const arr = String(raw).split(",").map(s=>s.trim()).filter(Boolean);
+  const set = new Set(arr.length ? arr : TODAS_ABAS.map(a=>a[0])); // vazio = todas
+  set.add("inicio"); // início sempre
+  return set;
+}
+function aplicarAbas(){
+  const admin = ehAdmin();
+  const vis = abasVisiveisSet();
+  $$(".nav a").forEach(a => {
+    const mostrar = admin || vis.has(a.dataset.nav);
+    a.style.display = mostrar ? "" : "none";
+  });
+  // se a aba atual ficou escondida, vai pra primeira visível
+  const atual = paginaAtual();
+  if(!admin && !vis.has(atual)){
+    const primeira = TODAS_ABAS.map(a=>a[0]).find(k => vis.has(k)) || "inicio";
+    irPara(primeira);
+  }
+}
+async function salvarAbasVisiveis(){
+  const marcadas = $$("#cfg-abas [data-aba]").filter(c=>c.checked).map(c=>c.dataset.aba);
+  if(!marcadas.includes("inicio")) marcadas.unshift("inicio");
+  const valor = marcadas.join(",");
+  state.config = state.config || {};
+  state.config.abas_visiveis = valor;
+  fecharModal(); aplicarAbas(); toast("Abas atualizadas para a equipe.");
+  const { error } = await sb.from("queijaria_config").upsert({ familia_id:familiaId, abas_visiveis:valor });
+  if(error) toast("Erro ao salvar abas: "+(error.message||"?"), true);
+}
 function abrirModalConfig(){
   if(bloqueiaLeitura()) return;
+  const vis = abasVisiveisSet();
+  const secaoAbas = ehAdmin() ? `
+    <div class="rotulo" style="margin-top:4px">Abas visíveis para a equipe</div>
+    <p class="dica" style="margin-top:-6px">Marque só o que eles devem ver por enquanto. Você (admin) enxerga tudo sempre.</p>
+    <div id="cfg-abas">${TODAS_ABAS.map(([k,r])=>`
+      <label class="cfg-aba"><input type="checkbox" data-aba="${k}" ${vis.has(k)?"checked":""} ${k==="inicio"?"disabled":""}> ${r}${k==="inicio"?" (sempre)":""}</label>`).join("")}</div>
+    <button class="btn btn-primario" id="cfg-abas-salvar" style="margin-bottom:16px">Salvar abas</button>` : "";
   abrirFolha(`
     <h2>Configurações</h2>
     ${ehAdmin() ? `<button class="btn btn-primario" id="cfg-admin" style="margin-bottom:14px">📊 Painel do administrador</button>` : ""}
+    ${secaoAbas}
     <div class="rotulo" style="margin-top:4px">Zona de perigo</div>
     <p class="dica">Apaga <b>todos os dados</b> da queijaria: fornecedores, queijos, insumos, recebimentos, lotes, faixas de preço e configurações. A conta e a família continuam. <b>Não tem volta.</b></p>
     <div class="campo"><label>Confirme com a senha da sua conta</label><input id="cfg-senha" type="password" autocomplete="current-password" placeholder="••••••••"></div>
     <div class="erro" id="cfg-erro"></div>
     <button class="btn btn-primario" id="cfg-zerar" style="background:var(--vermelho)">Começar do zero</button>`);
   $("#cfg-zerar").onclick = comecarDoZero;
-  if(ehAdmin()) $("#cfg-admin").onclick = abrirPainelAdmin;
+  if(ehAdmin()){
+    $("#cfg-admin").onclick = abrirPainelAdmin;
+    $("#cfg-abas-salvar").onclick = salvarAbasVisiveis;
+  }
 }
 
 /* ===================== PAINEL DO ADMINISTRADOR ===================== */
