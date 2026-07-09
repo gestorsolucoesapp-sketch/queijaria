@@ -407,7 +407,7 @@ body.leitura .cheque-card .nome, body.leitura .cheque-card .det, body.leitura .c
    ======================================================================= */
 const SUPABASE_URL      = "https://cadnmgaymgljmoadebkk.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uBKKvD_e5ef4326TvkFgcg_rRnjmTus";
-const APP_VER = "v51";
+const APP_VER = "v52";
 const SPLASH_MIN = 2400;
 const EMAIL_ADMIN = "jpferreira1356@icloud.com";
 const splashT0 = Date.now();                              // suba junto com o cache do sw.js
@@ -1385,8 +1385,17 @@ function renderLeiteAPagar(corpo){
     <div class="resumo">
       <div class="stat g"><div class="n">${num(litrosMes)}</div><div class="l">litros no mês</div></div>
       <div class="stat ${vencidos.length?"r":"a"}"><div class="n" style="font-size:1.05rem">${brl(valorVencido)}</div><div class="l">${vencidos.length?"vencido — pagar":"nada vencido"}</div></div>
-    </div>
-    <div class="rotulo">A pagar</div>`;
+    </div>`;
+
+  // gráfico de litros por dia (últimos 14 dias com entrega)
+  const diasG = [...new Set(state.recebimentos.map(r=>r.data))].filter(Boolean).sort().slice(-14);
+  if(diasG.length){
+    const litrosG = diasG.map(d => state.recebimentos.filter(r=>r.data===d).reduce((s,r)=>s+(Number(r.litros)||0),0));
+    html += `<div class="rotulo">Litros por dia</div>
+      <div class="graf-card" style="padding:10px 10px 6px">${barrasScrollHTML(diasG, litrosG)}</div>`;
+  }
+
+  html += `<div class="rotulo">A pagar</div>`;
 
   // ordenar: quem tem ciclo fechado (vencido) primeiro
   const chaves = Object.keys(grupos).sort((a,b)=>{
