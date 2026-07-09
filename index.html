@@ -407,7 +407,7 @@ body.leitura .cheque-card .nome, body.leitura .cheque-card .det, body.leitura .c
    ======================================================================= */
 const SUPABASE_URL      = "https://cadnmgaymgljmoadebkk.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uBKKvD_e5ef4326TvkFgcg_rRnjmTus";
-const APP_VER = "v50";
+const APP_VER = "v51";
 const SPLASH_MIN = 2400;
 const EMAIL_ADMIN = "jpferreira1356@icloud.com";
 const splashT0 = Date.now();                              // suba junto com o cache do sw.js
@@ -1609,11 +1609,43 @@ function renderLeiteHistorico(corpo){
   $$("#leite-corpo [data-fdet]").forEach(s => s.onclick = (e) => { e.stopPropagation(); abrirDetalheFornecedor(s.dataset.fdet); });
 }
 
+function barrasScrollHTML(dias, valores){
+  const H=150, PAD=10, GAP=12, BW=34;
+  const n=dias.length;
+  const W=PAD*2 + n*BW + (n-1)*GAP;
+  const max=Math.max(...valores,1);
+  let out="";
+  dias.forEach((d,i)=>{
+    const v=valores[i];
+    const h=v>0?Math.max(4,(v/max)*(H-52)):2;
+    const x=PAD+i*(BW+GAP), y=H-30-h;
+    out+=`<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${BW}" height="${h.toFixed(1)}" rx="4" fill="${v>0?'var(--ouro)':'var(--linha)'}"/>`;
+    if(v>0) out+=`<text x="${(x+BW/2).toFixed(1)}" y="${(y-6).toFixed(1)}" text-anchor="middle" font-size="9" fill="#8a7f68" font-family="'IBM Plex Mono',monospace">${Math.round(v)}</text>`;
+    out+=`<text x="${(x+BW/2).toFixed(1)}" y="${H-14}" text-anchor="middle" font-size="9" fill="#8a7f68" font-family="'IBM Plex Mono',monospace">${d.slice(8,10)}/${d.slice(5,7)}</text>`;
+  });
+  return `<div class="graf-scroll"><svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" style="display:block;max-width:none">${out}</svg></div>${n>6?'<div class="graf-dica-scroll">← arraste pro lado pra ver todos os dias →</div>':''}`;
+}
+
 function renderLeiteGraficos(corpo){
+  // total recebido por dia (todos os fornecedores)
+  const diasTot = [...new Set(state.recebimentos.map(r=>r.data))].filter(Boolean).sort();
+  const totPorDia = diasTot.map(d => state.recebimentos.filter(r=>r.data===d).reduce((s,r)=>s+(Number(r.litros)||0),0));
+  const totGeral = totPorDia.reduce((a,b)=>a+b,0);
+  const mediaDia = diasTot.length ? totGeral/diasTot.length : 0;
+
+  let html = "";
+  if(diasTot.length){
+    html += `<div class="rotulo">Total recebido por dia</div>
+      <div class="graf-card">
+        <div class="graf-cab"><div><div class="nome">${num(totGeral)} L no total</div><div class="det">${diasTot.length} dias · média ${num(mediaDia,0)} L/dia</div></div></div>
+        ${barrasScrollHTML(diasTot, totPorDia)}
+      </div>`;
+  }
+
   const DIAS = 14;
   const dias = []; for(let i=DIAS-1;i>=0;i--) dias.push(addDias(hoje(),-i));
   const fornsComDados = state.fornecedores.filter(f => state.recebimentos.some(r => r.fornecedor_id === f.id));
-  let html = `<div class="rotulo">Litros por dia · últimos ${DIAS} dias</div>`;
+  html += `<div class="rotulo" style="margin-top:16px">Por fornecedor · últimos ${DIAS} dias</div>`;
   if(!fornsComDados.length){
     html += vazioCad("Lance recebimentos pra ver os gráficos<br>de cada fornecedor aqui.");
   } else {
