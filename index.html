@@ -418,7 +418,7 @@ body.leitura .cheque-card .nome, body.leitura .cheque-card .det, body.leitura .c
    ======================================================================= */
 const SUPABASE_URL      = "https://cadnmgaymgljmoadebkk.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uBKKvD_e5ef4326TvkFgcg_rRnjmTus";
-const APP_VER = "v61";
+const APP_VER = "v62";
 const SPLASH_MIN = 2400;
 const EMAIL_ADMIN = "jpferreira1356@icloud.com";
 const splashT0 = Date.now();                              // suba junto com o cache do sw.js
@@ -1998,19 +1998,21 @@ function abrirModalDesconto(fid){
       <div class="campo"><label>Data</label><input id="d-data" type="date" value="${hoje()}"></div>
     </div>
     <div class="erro" id="d-erro"></div>
-    <button class="btn btn-primario" id="d-salvar">Adicionar desconto</button>
+    <button class="btn btn-primario" id="d-salvar">➕ Adicionar desconto</button>
+    <button class="btn btn-fantasma" id="d-fechar" style="margin-top:4px">Concluir</button>
     <div class="rotulo" style="margin-top:14px">Descontos pendentes</div>
     <div style="max-height:30vh;overflow-y:auto" id="d-lista">${lista}</div>`);
   $("#d-salvar").onclick = () => salvarDesconto(fid);
+  $("#d-fechar").onclick = fecharModal;
   $$("#d-lista [data-deldesc]").forEach(b => b.onclick = (e) => { e.stopPropagation(); excluirDesconto(b.dataset.deldesc); });
 }
 async function salvarDesconto(fid){
   const valor = parseFloat($("#d-valor").value)||0;
   if(valor <= 0){ $("#d-erro").textContent = "Informe o valor do desconto."; return; }
   const novo = { id:uid(), familia_id:familiaId, fornecedor_id:fid, descricao:$("#d-desc").value.trim()||null, valor, data:$("#d-data").value||hoje(), usado:false };
-  state.descontos.unshift(novo); fecharModal(); renderRecebimento(); toast("Desconto adicionado.");
+  state.descontos.unshift(novo); renderRecebimento(); abrirModalDesconto(fid); toast("Desconto adicionado. Pode lançar outro.");
   const { error } = await dbw("descontos").insert(novo);
-  if(error){ state.descontos = state.descontos.filter(x=>x.id!==novo.id); renderRecebimento(); toast("Erro ao salvar desconto: "+(error.message||"?"), true); }
+  if(error){ state.descontos = state.descontos.filter(x=>x.id!==novo.id); renderRecebimento(); abrirModalDesconto(fid); toast("Erro ao salvar desconto: "+(error.message||"?"), true); }
 }
 async function excluirDesconto(id){
   const bak = state.descontos; state.descontos = state.descontos.filter(x=>x.id!==id);
