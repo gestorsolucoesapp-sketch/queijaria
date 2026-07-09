@@ -183,6 +183,7 @@ input,select{font-family:inherit;font-size:16px}
   padding:2px 7px;border-radius:20px;margin-left:6px;white-space:nowrap;vertical-align:middle}
 .pill-venc.on{background:var(--vermelho);color:#fff}
 .pill-venc.pago{background:var(--verde);color:#fff}
+.btn-desc{margin-top:5px;background:transparent;color:var(--azul);border:1px solid var(--azul);border-radius:9px;padding:5px 12px;font-weight:700;font-size:.76rem;font-family:inherit;cursor:pointer;display:block;margin-left:auto}
 .btn-pago{margin-top:6px;background:var(--verde);color:#fff;border:none;border-radius:9px;
   padding:6px 14px;font-weight:700;font-size:.8rem;font-family:inherit;cursor:pointer}
 .stat.r .n{color:var(--vermelho)}
@@ -223,6 +224,7 @@ body.leitura .fab,
 body.leitura .mini-add,
 body.leitura .mini-acao,
 body.leitura .btn-pago,
+body.leitura .btn-desc,
 body.leitura .check-baixa,
 body.leitura .btn-scan,
 body.leitura #btn-config{ display:none !important; }
@@ -412,7 +414,7 @@ body.leitura .cheque-card .nome, body.leitura .cheque-card .det, body.leitura .c
    ======================================================================= */
 const SUPABASE_URL      = "https://cadnmgaymgljmoadebkk.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uBKKvD_e5ef4326TvkFgcg_rRnjmTus";
-const APP_VER = "v54";
+const APP_VER = "v55";
 const SPLASH_MIN = 2400;
 const EMAIL_ADMIN = "jpferreira1356@icloud.com";
 const splashT0 = Date.now();                              // suba junto com o cache do sw.js
@@ -444,7 +446,7 @@ function setLeitura(v){
   try { localStorage.setItem("modo_leitura", v ? "1" : "0"); } catch(e){}
   aplicarLeitura();
 }
-const state = { tipos: [], lotes: [], fornecedores: [], leiteFaixas: [], insumos: [], config: {}, recebimentos: [], vendas: [], cheques: [] };
+const state = { tipos: [], lotes: [], fornecedores: [], leiteFaixas: [], insumos: [], config: {}, recebimentos: [], vendas: [], cheques: [], descontos: [] };
 
 /* ===================== utilidades ===================== */
 const $  = (s, r=document) => r.querySelector(s);
@@ -663,7 +665,7 @@ $("#fam-criar").onclick = async () => {
 /* ===================== dados ===================== */
 async function carregarTudo(){
   const q = (p) => p.then(r => r.data || []).catch(() => []);
-  const [t, l, f, lf, ins, rec, vds, chq] = await Promise.all([
+  const [t, l, f, lf, ins, rec, vds, chq, dsc] = await Promise.all([
     q(sb.from("tipos_queijo").select("*").eq("familia_id", familiaId).order("nome")),
     q(sb.from("lotes").select("*").eq("familia_id", familiaId).order("data_fabricacao", { ascending:false })),
     q(sb.from("fornecedores").select("*").eq("familia_id", familiaId).order("nome")),
@@ -671,11 +673,12 @@ async function carregarTudo(){
     q(sb.from("insumos").select("*").eq("familia_id", familiaId).order("nome")),
     q(sb.from("recebimentos_leite").select("*").eq("familia_id", familiaId).order("data", { ascending:false })),
     q(sb.from("vendas").select("*").eq("familia_id", familiaId).order("data", { ascending:false })),
-    q(sb.from("cheques").select("*").eq("familia_id", familiaId).order("data", { ascending:false }))
+    q(sb.from("cheques").select("*").eq("familia_id", familiaId).order("data", { ascending:false })),
+    q(sb.from("descontos").select("*").eq("familia_id", familiaId).order("data", { ascending:false }))
   ]);
   let cfg = {};
   try { const r = await sb.from("queijaria_config").select("*").eq("familia_id", familiaId).maybeSingle(); cfg = r.data || {}; } catch(e){}
-  state.tipos = t; state.lotes = l; state.fornecedores = f; state.leiteFaixas = lf; state.insumos = ins; state.config = cfg; state.recebimentos = rec; state.vendas = vds; state.cheques = chq;
+  state.tipos = t; state.lotes = l; state.fornecedores = f; state.leiteFaixas = lf; state.insumos = ins; state.config = cfg; state.recebimentos = rec; state.vendas = vds; state.cheques = chq; state.descontos = dsc;
 }
 
 /* ===================== app / navegação ===================== */
@@ -1474,23 +1477,29 @@ function renderLeiteAPagar(corpo){
       const vencA = abertos.length  ? abertos.map(vencimentoDe).sort()[0] : null;
 
       if(fechados.length){
+        const desc = descPend(g.fid);
         return `<div class="tipo vencido" data-grupo="${k}">
           <div>
-            <div class="nome"><button class="mini-add" data-addforn="${g.fid}">+</button><span class="link-forn" data-fdet="${g.fid}">${esc(nomeForn(g.fid))}</span> <span class="pill-venc on">CICLO FECHADO</span></div>
-            <div class="det">${fechados.length} lançamentos · ${num(lF)} L · venceu ${dataBR(vencF)}${abertos.length?`<br><span style="color:var(--verde)">● ciclo novo: ${brl(vA)} · ${abertos.length} lanç. (próx. ${dataBR(vencA)})</span>`:""}</div>
+            <div class="nome"><span class="link-forn" data-fdet="${g.fid}">${esc(nomeForn(g.fid))}</span> <span class="pill-venc on">CICLO FECHADO</span></div>
+            <div class="det">${fechados.length} lançamentos · ${num(lF)} L · venceu ${dataBR(vencF)}${desc>0?`<br><span style="color:var(--azul)">− desconto ${brl(desc)} → líquido ${brl(vF-desc)}</span>`:""}${abertos.length?`<br><span style="color:var(--verde)">● ciclo novo: ${brl(vA)} · ${abertos.length} lanç. (próx. ${dataBR(vencA)})</span>`:""}</div>
           </div>
           <div style="text-align:right">
-            <div class="preco">${brl(vF)}</div>
+            <div class="preco">${brl(vF-desc)}</div>
             <button class="btn-pago" data-pagociclo="${k}">Pagar ciclo</button>
+            <button class="btn-desc" data-desc="${g.fid}">Desconto</button>
           </div>
         </div>`;
       }
+      const desc = descPend(g.fid);
       return `<div class="tipo" data-grupo="${k}">
         <div>
-          <div class="nome"><button class="mini-add" data-addforn="${g.fid}">+</button><span class="link-forn" data-fdet="${g.fid}">${esc(nomeForn(g.fid))}</span> <span class="pill-venc" data-prazoforn="${g.fid}">próx. ${dataBR(vencA)}</span></div>
-          <div class="det">${abertos.length} lançamento${abertos.length>1?"s":""} · ${num(lA)} L</div>
+          <div class="nome"><span class="link-forn" data-fdet="${g.fid}">${esc(nomeForn(g.fid))}</span> <span class="pill-venc" data-prazoforn="${g.fid}">próx. ${dataBR(vencA)}</span></div>
+          <div class="det">${abertos.length} lançamento${abertos.length>1?"s":""} · ${num(lA)} L${desc>0?`<br><span style="color:var(--azul)">− desconto ${brl(desc)} → líquido ${brl(vA-desc)}</span>`:""}</div>
         </div>
-        <div style="text-align:right"><div class="preco">${brl(vA)}</div></div>
+        <div style="text-align:right">
+          <div class="preco">${brl(vA-desc)}</div>
+          <button class="btn-desc" data-desc="${g.fid}">Desconto</button>
+        </div>
       </div>`;
     }).join("");
   }
@@ -1501,8 +1510,8 @@ function renderLeiteAPagar(corpo){
   $$("#leite-corpo [data-pagociclo]").forEach(b => b.onclick = (e) => {
     e.stopPropagation(); marcarPagoGrupo(G[b.dataset.pagociclo].itens.filter(estaFechado).map(r=>r.id));
   });
+  $$("#leite-corpo [data-desc]").forEach(b => b.onclick = (e) => { e.stopPropagation(); abrirModalDesconto(b.dataset.desc); });
   $$("#leite-corpo [data-fdet]").forEach(s => s.onclick = (e) => { e.stopPropagation(); abrirDetalheFornecedor(s.dataset.fdet); });
-  $$("#leite-corpo [data-addforn]").forEach(b => b.onclick = (e) => { e.stopPropagation(); abrirModalRecebimento(undefined, b.dataset.addforn); });
   $$("#leite-corpo [data-prazoforn]").forEach(p => p.onclick = (e) => { e.stopPropagation(); abrirModalPrazo(p.dataset.prazoforn); });
 }
 
@@ -1617,6 +1626,13 @@ async function marcarPagoGrupo(ids){
   if(bloqueiaLeitura()) return;
   const alvo = state.recebimentos.filter(r => ids.includes(r.id));
   if(!alvo.length) return;
+  // consumir descontos pendentes do(s) fornecedor(es) pagos
+  const fids = [...new Set(alvo.map(r=>r.fornecedor_id))];
+  const descUsar = state.descontos.filter(d => fids.includes(d.fornecedor_id) && !d.usado);
+  if(descUsar.length){
+    descUsar.forEach(d => d.usado = true);
+    sb.from("descontos").update({ usado:true }).in("id", descUsar.map(d=>d.id)).then(()=>{}, ()=>{});
+  }
   const bak = alvo.map(r => ({ id:r.id, pago:r.pago, pago_em:r.pago_em }));
   const em = hoje();
   alvo.forEach(r => { r.pago = true; r.pago_em = em; });
@@ -1805,6 +1821,51 @@ function abrirModalPrazo(fid){
     const { error } = await sb.from("fornecedores").update({ prazo_pagamento: dias }).eq("id", fid);
     if(error){ f.prazo_pagamento = bak; renderRecebimento(); toast("Erro ao mudar o período: "+(error.message||"?"), true); }
   };
+}
+
+function descPend(fid){ return state.descontos.filter(d => d.fornecedor_id === fid && !d.usado).reduce((s,d)=> s+(Number(d.valor)||0),0); }
+function descsPendentes(fid){ return state.descontos.filter(d => d.fornecedor_id === fid && !d.usado); }
+
+function abrirModalDesconto(fid){
+  if(bloqueiaLeitura()) return;
+  const f = state.fornecedores.find(x=>x.id===fid);
+  if(!f) return;
+  const pend = descsPendentes(fid);
+  const lista = pend.length ? pend.map(d=>`
+    <div class="tipo" style="padding:9px 12px" data-deldesc="${d.id}">
+      <div><div class="nome" style="font-size:.85rem">${esc(d.descricao||"Desconto")}</div><div class="det">${dataBR(d.data)}</div></div>
+      <div style="text-align:right"><div class="preco" style="color:var(--azul)">− ${brl(d.valor)}</div>
+        <button class="mini-acao del" data-deldesc="${d.id}" title="Apagar"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/></svg></button>
+      </div>
+    </div>`).join("") : `<p class="dica">Nenhum desconto pendente.</p>`;
+  abrirFolha(`
+    <h2>Desconto · ${esc(f.nome)}</h2>
+    <p class="dica" style="margin-top:-6px">Abate do total a pagar (queijo que ele pegou, adiantamento, etc.).</p>
+    <div class="campo"><label>Descrição</label><input id="d-desc" placeholder="Ex.: 2 kg de muçarela"></div>
+    <div class="linha-campos">
+      <div class="campo"><label>Valor (R$)</label><input id="d-valor" type="number" inputmode="decimal" placeholder="0,00"></div>
+      <div class="campo"><label>Data</label><input id="d-data" type="date" value="${hoje()}"></div>
+    </div>
+    <div class="erro" id="d-erro"></div>
+    <button class="btn btn-primario" id="d-salvar">Adicionar desconto</button>
+    <div class="rotulo" style="margin-top:14px">Descontos pendentes</div>
+    <div style="max-height:30vh;overflow-y:auto" id="d-lista">${lista}</div>`);
+  $("#d-salvar").onclick = () => salvarDesconto(fid);
+  $$("#d-lista [data-deldesc]").forEach(b => b.onclick = (e) => { e.stopPropagation(); excluirDesconto(b.dataset.deldesc); });
+}
+async function salvarDesconto(fid){
+  const valor = parseFloat($("#d-valor").value)||0;
+  if(valor <= 0){ $("#d-erro").textContent = "Informe o valor do desconto."; return; }
+  const novo = { id:uid(), familia_id:familiaId, fornecedor_id:fid, descricao:$("#d-desc").value.trim()||null, valor, data:$("#d-data").value||hoje(), usado:false };
+  state.descontos.unshift(novo); fecharModal(); renderRecebimento(); toast("Desconto adicionado.");
+  const { error } = await sb.from("descontos").insert(novo);
+  if(error){ state.descontos = state.descontos.filter(x=>x.id!==novo.id); renderRecebimento(); toast("Erro ao salvar desconto: "+(error.message||"?"), true); }
+}
+async function excluirDesconto(id){
+  const bak = state.descontos; state.descontos = state.descontos.filter(x=>x.id!==id);
+  fecharModal(); renderRecebimento(); toast("Desconto removido.");
+  const { error } = await sb.from("descontos").delete().eq("id", id);
+  if(error){ state.descontos = bak; renderRecebimento(); toast("Erro ao remover: "+(error.message||"?"), true); }
 }
 
 function abrirModalRecebimento(id, fornPre){
