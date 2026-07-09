@@ -416,7 +416,7 @@ body.leitura .cheque-card .nome, body.leitura .cheque-card .det, body.leitura .c
    ======================================================================= */
 const SUPABASE_URL      = "https://cadnmgaymgljmoadebkk.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uBKKvD_e5ef4326TvkFgcg_rRnjmTus";
-const APP_VER = "v56";
+const APP_VER = "v57";
 const SPLASH_MIN = 2400;
 const EMAIL_ADMIN = "jpferreira1356@icloud.com";
 const splashT0 = Date.now();                              // suba junto com o cache do sw.js
@@ -1604,22 +1604,35 @@ function abrirGrupoRecebimentos(g){
     porDia[r.data].valor  += Number(r.valor_total)||0;
     porDia[r.data].itens.push(r);
   });
+  const editSvg = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.8 2.8 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>`;
+  const delSvg  = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>`;
+  const acoes = (r) => `
+    <button class="mini-acao" data-editrec="${r.id}" title="Editar">${editSvg}</button>
+    <button class="mini-acao del" data-delrec="${r.id}" title="Apagar">${delSvg}</button>`;
   const linhas = Object.keys(porDia).sort().reverse().map(d => {
     const x = porDia[d];
+    if(x.itens.length === 1){
+      // tudo numa linha só
+      const r = x.itens[0];
+      return `<div class="tipo" style="padding:10px 12px;align-items:center">
+        <div style="flex:1">
+          <div class="nome" style="font-size:.85rem">${dataBR(d)}</div>
+          <div class="det">${num(r.litros)} L × ${brl(r.preco_litro)}/L</div>
+        </div>
+        <div class="preco" style="margin-right:6px">${brl(r.valor_total)}</div>
+        ${acoes(r)}
+      </div>`;
+    }
+    // vários no mesmo dia: cabeçalho + itens
     const filhos = x.itens.map(r => `
       <div class="tipo sub-ent" style="display:flex;padding:8px 12px;margin-left:14px;align-items:center">
         <div style="flex:1"><div class="det">${num(r.litros)} L × ${brl(r.preco_litro)}/L</div></div>
         <div class="preco" style="font-size:.8rem;margin-right:6px">${brl(r.valor_total)}</div>
-        <button class="mini-acao" data-editrec="${r.id}" title="Editar">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.8 2.8 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>
-        </button>
-        <button class="mini-acao del" data-delrec="${r.id}" title="Apagar">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-        </button>
+        ${acoes(r)}
       </div>`).join("");
     return `<div class="tipo" style="padding:10px 12px" data-dia="${d}">
       <div><div class="nome" style="font-size:.85rem">${dataBR(d)}</div>
-      <div class="det">${num(x.litros)} L · ${x.itens.length===1?"1 entrega":x.itens.length+" entregas"}</div></div>
+      <div class="det">${num(x.litros)} L · ${x.itens.length} entregas — toque</div></div>
       <div class="preco">${brl(x.valor)}</div>
     </div>${filhos}`;
   }).join("");
