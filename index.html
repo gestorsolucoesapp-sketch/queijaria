@@ -177,6 +177,10 @@ input,select{font-family:inherit;font-size:16px}
 .subnav a.ativo{background:var(--ouro);color:#fff;opacity:1}
 .tipo .ver{color:var(--tinta-mole);font-size:1.4rem;line-height:1;padding-left:8px}
 .fila-badge{font-size:.6rem;font-weight:700;color:#fff;background:var(--azul);padding:2px 7px;border-radius:20px;margin-left:5px;white-space:nowrap}
+.btn-queijo{display:inline-flex;align-items:center;gap:3px;margin-left:7px;padding:3px 9px 3px 4px;border:1px solid #e6cf8f;background:linear-gradient(#fff9e8,#fdf1d0);border-radius:20px;cursor:pointer;box-shadow:0 1px 3px rgba(180,140,30,.18)}
+.btn-queijo:active{transform:none;opacity:.75}
+.btn-queijo-x{font-size:.7rem;font-weight:800;color:#b8891f;letter-spacing:.5px}
+body.leitura .btn-queijo{display:none !important}
 .ia-msgs{max-height:52vh;overflow-y:auto;display:flex;flex-direction:column;gap:8px;padding:4px 2px;margin:6px 0}
 .ia-bolha{max-width:85%;padding:10px 13px;border-radius:15px;font-size:.9rem;line-height:1.4;word-wrap:break-word}
 .ia-eu{align-self:flex-end;background:var(--ouro);color:#3a2c10;border-bottom-right-radius:5px}
@@ -249,7 +253,7 @@ body.leitura .btn-pago,
 body.leitura .btn-desc,
 body.leitura .check-baixa,
 body.leitura .btn-scan,
-body.leitura #btn-config, body.leitura #btn-ia{ display:none !important; }
+body.leitura #btn-config{ display:none !important; }
 body.leitura .cheque-card{ pointer-events:none }
 body.leitura .cheque-card .nome, body.leitura .cheque-card .det, body.leitura .cheque-card .preco{ pointer-events:auto }
 .cfg-aba{display:flex;align-items:center;gap:10px;padding:9px 4px;font-weight:600;border-bottom:1px solid var(--linha)}
@@ -388,12 +392,22 @@ body.leitura .fab-ia{display:grid}
       <img src="logo.png" alt="" style="width:44px;height:44px;border-radius:11px;object-fit:contain" onerror="this.style.display='none'">
       <b id="topo-nome">Queijaria</b>
       <span id="topo-ver" class="verbadge"></span>
+      <button id="btn-ia" class="btn-queijo" title="Analista de IA">
+        <svg width="26" height="26" viewBox="0 0 32 32" fill="none" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4 24 L4 15.5 C4 14.7 4.4 14 5.1 13.6 L26 3.2 C27 2.7 28.2 3.4 28.2 4.6 L28.2 24 Z" fill="#f5c542" stroke="#c9992a" stroke-width="1.3"/>
+          <path d="M4 15.7 L28.2 13.2" stroke="#c9992a" stroke-width="1.1" fill="none"/>
+          <path d="M4 24 L28.2 24" stroke="#c9992a" stroke-width="1.1" fill="none"/>
+          <circle cx="9" cy="19.5" r="1.7" fill="#e0a92e"/>
+          <circle cx="15.5" cy="20.8" r="1.3" fill="#e0a92e"/>
+          <circle cx="20.5" cy="18.6" r="1.9" fill="#e0a92e"/>
+          <circle cx="24.5" cy="20.5" r="1" fill="#e0a92e"/>
+          <circle cx="12.5" cy="16.6" r="0.9" fill="#e0a92e"/>
+        </svg>
+        <span class="btn-queijo-x">IA</span>
+      </button>
       <span id="fila-badge" class="fila-badge" style="display:none"></span>
     </div>
     <div class="topo-acoes">
-      <button class="icone-btn" id="btn-ia" title="Analista de IA">
-        <svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 18v-6.5a1 1 0 0 1 .55-.9l16-8A1 1 0 0 1 21 3.5V18a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z"/><path d="M3.2 11.2 21 10"/><circle cx="8" cy="14.5" r="1.1" fill="currentColor" stroke="none"/><circle cx="13.5" cy="14" r="1.1" fill="currentColor" stroke="none"/><circle cx="17.5" cy="13" r="0.9" fill="currentColor" stroke="none"/></svg>
-      </button>
       <button class="icone-btn" id="btn-config" title="Configurações">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.09a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.09a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
       </button>
@@ -460,7 +474,7 @@ body.leitura .fab-ia{display:grid}
    ======================================================================= */
 const SUPABASE_URL      = "https://cadnmgaymgljmoadebkk.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uBKKvD_e5ef4326TvkFgcg_rRnjmTus";
-const APP_VER = "v68";
+const APP_VER = "v69";
 const SPLASH_MIN = 2400;
 const EMAIL_ADMIN = "jpferreira1356@icloud.com";
 const splashT0 = Date.now();                              // suba junto com o cache do sw.js
