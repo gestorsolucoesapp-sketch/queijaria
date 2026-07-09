@@ -396,7 +396,7 @@ input,select{font-family:inherit;font-size:16px}
    ======================================================================= */
 const SUPABASE_URL      = "https://cadnmgaymgljmoadebkk.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uBKKvD_e5ef4326TvkFgcg_rRnjmTus";
-const APP_VER = "v47";
+const APP_VER = "v48";
 const SPLASH_MIN = 2400;
 const EMAIL_ADMIN = "jpferreira1356@icloud.com";
 const splashT0 = Date.now();                              // suba junto com o cache do sw.js
@@ -1775,7 +1775,7 @@ function graficoCheques(pend){
   pend.forEach(c => { const d = bomParaDe(c); porDia[d] = (porDia[d]||0) + (Number(c.valor)||0); });
   const dias = Object.keys(porDia).sort();
   if(!dias.length) return "";
-  const H=150, PAD=12, GAP=26, BW=54;     // barras largas e bem espaçadas
+  const H=150, PAD=10, GAP=12, BW=34;     // meio-termo: cabe mais dias
   const n = dias.length;
   const W = PAD*2 + n*BW + (n-1)*GAP;      // largura cresce com os dias (scroll)
   const max = Math.max(...dias.map(d=>porDia[d]), 1);
