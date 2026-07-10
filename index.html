@@ -522,7 +522,7 @@ body.leitura .cheque-card .nome, body.leitura .cheque-card .det, body.leitura .c
    ======================================================================= */
 const SUPABASE_URL      = "https://cadnmgaymgljmoadebkk.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uBKKvD_e5ef4326TvkFgcg_rRnjmTus";
-const APP_VER = "v84";
+const APP_VER = "v85";
 const SPLASH_MIN = 2400;
 const EMAIL_ADMIN = "jpferreira1356@icloud.com";
 const splashT0 = Date.now();                              // suba junto com o cache do sw.js
@@ -1058,16 +1058,23 @@ function tokensDoMes(){ const t = (state.config && state.config.ia_tokens) || {}
 function metaTokens(){ const t = (state.config && state.config.ia_tokens) || {}; return Number(t.meta) || 500000; }
 function atualizarBarraTokens(){
   const el = $("#ia-uso"); if(!el) return;
+  if(!ehAdmin()){ el.style.display = "none"; return; }
+  el.style.display = "";
   const usados = tokensDoMes(), meta = metaTokens();
   const pct = meta > 0 ? Math.min(100, usados/meta*100) : 0;
   const cor = pct >= 90 ? "var(--vermelho)" : (pct >= 70 ? "var(--ouro)" : "var(--verde)");
+  const restante = meta - usados;
+  const lbl = restante > 0
+    ? `Faltam <b>${fmtTok(restante)}</b> · usou ${fmtTok(usados)} (${pct.toFixed(0)}%)`
+    : `Meta atingida · passou ${fmtTok(-restante)} de ${fmtTok(meta)}`;
   el.innerHTML = `
     <div class="ia-uso-top"><span>Tokens este mês (estimativa)</span><button id="ia-meta-btn" class="ia-meta-lnk">meta ${fmtTok(meta)} ✏️</button></div>
     <div class="ia-uso-track"><div class="ia-uso-fill" style="width:${pct.toFixed(1)}%;background:${cor}"></div></div>
-    <div class="ia-uso-lbl">${fmtTok(usados)} de ${fmtTok(meta)} tokens · ${pct.toFixed(0)}%</div>`;
+    <div class="ia-uso-lbl">${lbl}</div>`;
   const mb = $("#ia-meta-btn"); if(mb) mb.onclick = abrirModalMetaTokens;
 }
 function registrarTokensIA(pergunta, resposta){
+  if(!ehAdmin()) return;
   state.config = state.config || {};
   const t = state.config.ia_tokens = state.config.ia_tokens || {};
   const mes = mesAtual();
