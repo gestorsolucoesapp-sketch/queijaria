@@ -502,7 +502,7 @@ body.leitura .cheque-card .nome, body.leitura .cheque-card .det, body.leitura .c
    ======================================================================= */
 const SUPABASE_URL      = "https://cadnmgaymgljmoadebkk.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uBKKvD_e5ef4326TvkFgcg_rRnjmTus";
-const APP_VER = "v74";
+const APP_VER = "v75";
 const SPLASH_MIN = 2400;
 const EMAIL_ADMIN = "jpferreira1356@icloud.com";
 const splashT0 = Date.now();                              // suba junto com o cache do sw.js
@@ -2390,6 +2390,16 @@ function refreshCheques(){
   if(vc && !vc.classList.contains("hidden")) renderCheques(vc);
   else renderRecebimento();
 }
+function confirmarAcao(msg, aoConfirmar, opts={}){
+  const { titulo="Confirmação", ok="Confirmar", corOk="var(--ouro)", corTexto="#3a2a05" } = opts;
+  abrirFolha(`
+    <h2>${titulo}</h2>
+    <p class="dica">${msg}</p>
+    <button class="btn btn-primario" id="ca-ok" style="background:${corOk};color:${corTexto}">${ok}</button>
+    <button class="btn btn-fantasma" id="ca-nao" style="margin-top:6px">Cancelar</button>`);
+  $("#ca-nao").onclick = fecharModal;
+  $("#ca-ok").onclick = () => { fecharModal(); aoConfirmar(); };
+}
 function confirmarComSenha(msg, aoConfirmar){
   abrirFolha(`
     <h2>Confirmação</h2>
@@ -2650,8 +2660,23 @@ async function salvarCheque(id){
     if(error){ state.cheques = state.cheques.filter(x=>x.id!==novo.id); refreshCheques(); toast("Erro ao salvar: "+(error.message||"?"), true); }
   }
 }
-async function alternarBaixaCheque(id){
+function alternarBaixaCheque(id){
   if(bloqueiaLeitura()) return;
+  const c = state.cheques.find(x=>x.id===id);
+  if(!c) return;
+  const dando = !c.compensado;
+  const quem = esc(c.para || "este cheque");
+  const msg = dando
+    ? `Dar baixa no cheque de <b>${quem}</b> (${brl(c.valor)})?<br>Ele vai para os compensados.`
+    : `Desfazer a baixa do cheque de <b>${quem}</b> (${brl(c.valor)})?<br>Ele volta para os pendentes.`;
+  confirmarAcao(msg, () => aplicarBaixaCheque(id), {
+    titulo: dando ? "Dar baixa" : "Desfazer baixa",
+    ok: dando ? "Dar baixa" : "Desfazer",
+    corOk: dando ? "var(--verde)" : "var(--vermelho)",
+    corTexto: "#fff"
+  });
+}
+async function aplicarBaixaCheque(id){
   const c = state.cheques.find(x=>x.id===id);
   if(!c) return;
   const bak = { compensado:c.compensado, compensado_em:c.compensado_em };
