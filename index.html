@@ -289,6 +289,13 @@ body.leitura .cheque-card .nome, body.leitura .cheque-card .det, body.leitura .c
 .ia-toggle-falar.on{background:var(--ouro);color:#fff;border-color:var(--ouro)}
 .ia-ouvir{display:inline-flex;align-items:center;gap:4px;margin-top:6px;background:none;border:none;cursor:pointer;font-size:.75rem;color:var(--tinta-mole);opacity:.85;padding:0;font-family:inherit}
 .ia-ouvir:active{opacity:.5}
+.ia-acao{align-self:stretch;background:#fff6e6;border:1.5px solid var(--ouro);border-radius:14px;padding:12px 14px;margin:2px 0}
+.ia-acao .tit{font-weight:800;color:var(--ouro-esc);font-size:.85rem;margin-bottom:4px}
+.ia-acao .res{font-size:.9rem;color:var(--tinta);line-height:1.4}
+.ia-acao .bts{display:flex;gap:8px;margin-top:10px}
+.ia-acao .bts button{flex:1;border:none;border-radius:10px;padding:10px;font-weight:700;font-family:inherit;font-size:.88rem;cursor:pointer}
+.ia-acao .ok{background:var(--verde);color:#fff}
+.ia-acao .nao{background:var(--linha);color:var(--tinta-mole)}
 .ia-sugestoes{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
 .ia-sug{background:var(--card);border:1px solid var(--linha);border-radius:20px;padding:6px 12px;font-size:.78rem;font-family:inherit;cursor:pointer;color:var(--tinta)}
 .alerta-ciclo{background:#fdeceb;border:1.5px solid var(--vermelho);border-radius:var(--r);padding:13px 15px;margin-bottom:14px;cursor:pointer;box-shadow:var(--sombra)}
@@ -509,7 +516,7 @@ body.leitura .cheque-card .nome, body.leitura .cheque-card .det, body.leitura .c
    ======================================================================= */
 const SUPABASE_URL      = "https://cadnmgaymgljmoadebkk.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uBKKvD_e5ef4326TvkFgcg_rRnjmTus";
-const APP_VER = "v80";
+const APP_VER = "v81";
 const SPLASH_MIN = 2400;
 const EMAIL_ADMIN = "jpferreira1356@icloud.com";
 const splashT0 = Date.now();                              // suba junto com o cache do sw.js
@@ -643,7 +650,16 @@ ${forn||"- nenhum pendente"}
 CHEQUES PENDENTES:
 ${chqLista||"- nenhum"}
 
-Se te perguntarem algo fora desses dados, responda com bom senso mas avise que não tem essa informação no app.`;
+Se te perguntarem algo fora desses dados, responda com bom senso mas avise que não tem essa informação no app.
+
+VOCÊ PODE EXECUTAR AÇÕES NO APP. Quando o usuário claramente pedir para CADASTRAR/REGISTRAR um cheque ou DAR BAIXA em um cheque, responda com UMA frase curta confirmando o que entendeu e, na última linha, inclua um bloco de ação EXATAMENTE neste formato (uma linha, começando com ACAO:):
+ACAO:{"tipo":"cheque_novo","para":"NOME","valor":000.00,"vencimento":"AAAA-MM-DD"}
+ACAO:{"tipo":"cheque_baixa","para":"NOME","valor":000.00}
+Regras das ações:
+- "vencimento" é a data em que o cheque cai (bom para). Se o usuário disser "prazo de X dias a partir de hoje", calcule a data (hoje é ${hoje()}).
+- Só emita o bloco ACAO quando tiver os dados essenciais. Se faltar nome, valor ou data, NÃO emita ação: pergunte o que falta em texto normal.
+- Para dar baixa, identifique o cheque pendente pelo nome e valor.
+- Nunca invente valores. Uma ação por resposta. Para perguntas/consultas, responda só em texto, sem bloco ACAO.`;
 }
 
 function abrirChatIA(){
@@ -730,10 +746,76 @@ function falarTexto(txt){
   }catch(e){}
 }
 function pararFala(){ try{ if("speechSynthesis" in window) speechSynthesis.cancel(); }catch(e){} }
+
+function extrairAcaoIA(txt){
+  const m = String(txt||"").match(/ACAO:\s*(\{[\s\S]*?\})/);
+  if(!m) return null;
+  try{ return JSON.parse(m[1]); }catch(e){ return null; }
+}
+function resumoAcaoIA(a){
+  if(!a || !a.tipo) return null;
+  if(a.tipo==="cheque_novo"){
+    if(!a.para || !(Number(a.valor)>0) || !a.vencimento) return null;
+    return `Registrar um cheque:\n• Para: ${a.para}\n• Valor: ${brl(a.valor)}\n• Cai em: ${dataBR(a.vencimento)}`;
+  }
+  if(a.tipo==="cheque_baixa"){
+    if(!a.para && !(Number(a.valor)>0)) return null;
+    return `Dar baixa (marcar compensado) no cheque:\n• ${a.para||"?"}${Number(a.valor)>0?` — ${brl(a.valor)}`:""}`;
+  }
+  return null;
+}
+async function executarAcaoIA(idx){
+  const m = iaHist[idx];
+  if(!m || m.role!=="acao" || m.estado!=="pendente") return;
+  if(bloqueiaLeitura()){ return; }
+  const a = m.action;
+  try{
+    if(a.tipo==="cheque_novo"){
+      const novo = { id:uid(), familia_id:familiaId, compensado:false, compensado_em:null,
+        para:String(a.para).trim(), valor:Number(a.valor)||0, numero:null,
+        data:a.vencimento, prazo_dias:0 };
+      state.cheques.unshift(novo); m.estado="feito";
+      m.resultado = `Cheque de ${brl(novo.valor)} para ${novo.para} registrado — cai em ${dataBR(novo.data)}.`;
+      pintarChat(); refreshCheques();
+      const { error } = await dbw("cheques").insert(novo);
+      if(error){ state.cheques = state.cheques.filter(x=>x.id!==novo.id); m.estado="erro"; m.resultado="Erro ao salvar o cheque: "+(error.message||"?"); pintarChat(); refreshCheques(); }
+    }
+    else if(a.tipo==="cheque_baixa"){
+      const alvoNome = normTxt(a.para||"");
+      const alvoVal = Number(a.valor)||0;
+      let cands = state.cheques.filter(c=>!c.compensado);
+      if(alvoNome) cands = cands.filter(c=> normTxt(c.para).includes(alvoNome));
+      if(alvoVal>0){
+        const exatos = cands.filter(c=> Math.abs((Number(c.valor)||0)-alvoVal) < 0.02);
+        if(exatos.length) cands = exatos;
+      }
+      if(!cands.length){ m.estado="erro"; m.resultado="Não achei um cheque pendente com esse nome/valor."; pintarChat(); return; }
+      if(cands.length>1){ m.estado="erro"; m.resultado=`Achei ${cands.length} cheques que batem. Seja mais específico (nome + valor) e tente de novo.`; pintarChat(); return; }
+      const c = cands[0];
+      const bak = { compensado:c.compensado, compensado_em:c.compensado_em };
+      c.compensado=true; c.compensado_em=hoje(); m.estado="feito";
+      m.resultado = `Baixa dada no cheque de ${c.para||"—"} (${brl(c.valor)}). Foi pros compensados.`;
+      pintarChat(); refreshCheques();
+      const { error } = await dbw("cheques").update({ compensado:true, compensado_em:c.compensado_em }).eq("id", c.id);
+      if(error){ Object.assign(c,bak); m.estado="erro"; m.resultado="Erro ao dar baixa: "+(error.message||"?"); pintarChat(); refreshCheques(); }
+    }
+  }catch(e){ m.estado="erro"; m.resultado="Não consegui concluir a ação."; pintarChat(); }
+}
 function pintarChat(){
   const box = $("#ia-msgs"); if(!box) return;
   if(!iaHist.length){ box.innerHTML = `<div class="ia-vazio">Oi! Sou o assistente da Queijaria Bene. Como posso ajudar?</div>`; return; }
   box.innerHTML = iaHist.map((m,i) => {
+    if(m.role==="acao"){
+      if(m.estado==="pendente"){
+        return `<div class="ia-acao" data-ai="${i}">
+          <div class="tit">Confirmar ação</div>
+          <div class="res">${esc(m.resumo)}</div>
+          <div class="bts"><button class="ok" data-acao-ok="${i}">Confirmar</button><button class="nao" data-acao-nao="${i}">Cancelar</button></div>
+        </div>`;
+      }
+      const ic = m.estado==="feito" ? "✅" : (m.estado==="cancelado" ? "↩︎" : "⚠️");
+      return `<div class="ia-msg assistant">${ic} ${esc(m.resultado||"")}</div>`;
+    }
     const corpo = esc(m.content).replace(/\n/g,"<br>");
     if(m.role==="assistant" && m.content && m.content!=="…" && ("speechSynthesis" in window)){
       return `<div class="ia-msg assistant">${corpo}<br><button class="ia-ouvir" data-i="${i}">🔊 ouvir</button></div>`;
@@ -741,6 +823,8 @@ function pintarChat(){
     return `<div class="ia-msg ${m.role}">${corpo}</div>`;
   }).join("");
   box.querySelectorAll(".ia-ouvir").forEach(b => b.onclick = () => falarTexto(iaHist[+b.dataset.i]?.content));
+  box.querySelectorAll("[data-acao-ok]").forEach(b => b.onclick = () => executarAcaoIA(+b.dataset.acaoOk));
+  box.querySelectorAll("[data-acao-nao]").forEach(b => b.onclick = () => { const m=iaHist[+b.dataset.acaoNao]; if(m){ m.estado="cancelado"; m.resultado="Ação cancelada."; } pintarChat(); });
   box.scrollTop = box.scrollHeight;
 }
 async function enviarIA(){
@@ -752,12 +836,19 @@ async function enviarIA(){
   pintarChat();
   try {
     const { data, error } = await sb.functions.invoke("ai-chat", {
-      body: { system: contextoQueijaria(), messages: iaHist.filter(m=>m.content!=="…") }
+      body: { system: contextoQueijaria(), messages: iaHist.filter(m=>(m.role==="user"||m.role==="assistant") && m.content && m.content!=="…") }
     });
     if(error) throw error;
     const resposta = (data && (data.reply || data.text || data.content)) || "Não consegui responder agora.";
-    iaHist[iaHist.length-1] = { role:"assistant", content:resposta };
-    if(iaFalar) falarTexto(resposta);
+    const acao = extrairAcaoIA(resposta);
+    const textoLimpo = resposta.replace(/ACAO:\s*\{[\s\S]*?\}\s*$/,"").trim() || (acao ? "Certo!" : resposta);
+    iaHist[iaHist.length-1] = { role:"assistant", content:textoLimpo };
+    if(iaFalar) falarTexto(textoLimpo);
+    if(acao){
+      const resumo = resumoAcaoIA(acao);
+      if(resumo) iaHist.push({ role:"acao", action:acao, resumo, estado:"pendente" });
+      else iaHist.push({ role:"assistant", content:"Não entendi bem os dados da ação. Pode repetir com nome, valor e data?" });
+    }
   } catch(e){
     iaHist[iaHist.length-1] = { role:"assistant", content:"Ops, não consegui responder. Verifique a conexão ou tente de novo." };
   }
