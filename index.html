@@ -294,6 +294,12 @@ body.leitura .cheque-card .nome, body.leitura .cheque-card .det, body.leitura .c
 .alerta-cheque .ac-sub{font-size:.8rem;color:var(--tinta-mole);margin-top:1px}
 .btn-whats{background:#25D366;color:#fff;border:none;display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:12px}
 .cheque-card{display:flex;align-items:center;gap:12px}
+.chq-busca{position:relative;margin-bottom:14px}
+.chq-busca svg{position:absolute;left:13px;top:50%;transform:translateY(-50%);color:var(--tinta-mole);pointer-events:none}
+.chq-busca input{width:100%;padding:12px 40px;border:1px solid var(--linha-forte);border-radius:12px;font-size:16px;font-family:inherit;background:var(--card);color:var(--tinta)}
+.chq-busca input:focus{border-color:var(--ouro);outline:none}
+.chq-x{position:absolute;right:8px;top:50%;transform:translateY(-50%);width:28px;height:28px;border:none;background:var(--linha);color:var(--tinta-mole);border-radius:50%;font-size:18px;line-height:1;cursor:pointer;display:none;place-items:center}
+.chq-diff{font-size:12px;color:var(--tinta-mole);margin:-4px 0 10px 40px}
 .check-baixa{width:28px;height:28px;border-radius:9px;border:2px solid var(--linha-forte);background:var(--card);flex:none;cursor:pointer;display:grid;place-items:center;padding:0}
 .check-baixa.on{background:var(--verde);border-color:var(--verde)}
 .cheque-card.compensado-item{border:1.5px solid var(--verde);box-shadow:0 0 0 3px rgba(78,124,58,.08)}
@@ -496,7 +502,7 @@ body.leitura .cheque-card .nome, body.leitura .cheque-card .det, body.leitura .c
    ======================================================================= */
 const SUPABASE_URL      = "https://cadnmgaymgljmoadebkk.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uBKKvD_e5ef4326TvkFgcg_rRnjmTus";
-const APP_VER = "v73";
+const APP_VER = "v74";
 const SPLASH_MIN = 2400;
 const EMAIL_ADMIN = "jpferreira1356@icloud.com";
 const splashT0 = Date.now();                              // suba junto com o cache do sw.js
@@ -2484,6 +2490,14 @@ function abrirChequesDoDia(d){
   $$("[data-cheque-dia]").forEach(el => el.onclick = () => abrirModalCheque(el.dataset.chequeDia));
 }
 
+let chequeBuscaQ = "";
+function normTxt(s){ return String(s ?? "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,""); }
+function parseValorBusca(q){
+  const limpo = String(q).replace(/[^\d.,]/g,"").replace(/\.(?=\d{3}(\D|$))/g,"").replace(",",".");
+  const n = parseFloat(limpo);
+  return isNaN(n) ? null : n;
+}
+
 function renderCheques(corpo){
   const pend = state.cheques.filter(c => !c.compensado);
   const comp = state.cheques.filter(c => c.compensado);
@@ -2511,25 +2525,81 @@ function renderCheques(corpo){
     </div>`;
   };
 
+  const bindCards = (cont) => {
+    cont.querySelectorAll("[data-cheque]").forEach(el => el.onclick = (e) => { if(e.target.closest("[data-baixa]")) return; abrirModalCheque(el.dataset.cheque); });
+    cont.querySelectorAll("[data-baixa]").forEach(b => b.onclick = (e) => { e.stopPropagation(); alternarBaixaCheque(b.dataset.baixa); });
+    cont.querySelectorAll("[data-gdia]").forEach(r => r.onclick = () => abrirChequesDoDia(r.dataset.gdia));
+    cont.querySelectorAll("[data-compensar]").forEach(b => b.onclick = (e) => { e.stopPropagation(); marcarCompensado(b.dataset.compensar); });
+  };
+
+  const corpoPadrao = () => {
+    let h = `${pend.length ? `<div class="rotulo">Volume por dia — toque na barra pra ver quem recebe</div><div class="graf-card">${graficoCheques(pend)}</div>` : ""}
+    <div class="rotulo">Cheques pendentes</div>`;
+    h += pend.length
+      ? [...pend].sort((a,b)=> bomParaDe(a).localeCompare(bomParaDe(b))).map(cartao).join("")
+      : vazioCad("Toque no <b>+</b> pra registrar um cheque:<br>pra quem, valor, data e prazo.");
+    if(comp.length){
+      h += `<div class="rotulo" style="margin-top:16px">Compensados</div>`;
+      h += [...comp].sort((a,b)=> String(b.compensado_em||b.data).localeCompare(String(a.compensado_em||a.data))).map(cartao).join("");
+    }
+    return h;
+  };
+
+  const corpoBusca = (q) => {
+    const termo = q.trim();
+    const qn = normTxt(termo);
+    const valor = parseValorBusca(termo);
+    const soNumero = /^[\s\d.,r$]+$/i.test(termo) && valor !== null;
+    let itens;
+    if(soNumero){
+      const tol = Math.max(valor * 0.15, 100); // janela de "valor próximo"
+      const todos = state.cheques.map(c => ({ c, diff: Math.abs((Number(c.valor)||0) - valor) })).sort((a,b)=> a.diff - b.diff);
+      itens = todos.filter(o => o.diff <= tol).slice(0, 30);
+      if(!itens.length) itens = todos.slice(0, 6); // se nada dentro da tolerância, mostra os mais próximos
+    } else {
+      itens = state.cheques
+        .filter(c => normTxt(c.para).includes(qn) || normTxt(c.numero).includes(qn))
+        .sort((a,b)=> bomParaDe(a).localeCompare(bomParaDe(b)))
+        .map(c => ({ c, diff:null }));
+    }
+    if(!itens.length) return vazioCad("Nenhum cheque encontrado.<br>Tente outro nome ou valor.");
+    const total = itens.reduce((s,o)=> s+(Number(o.c.valor)||0),0);
+    const rot = soNumero ? `próximos de ${brl(valor)}` : `para “${esc(termo)}”`;
+    let h = `<div class="rotulo">${itens.length} resultado${itens.length>1?"s":""} ${rot} · ${brl(total)}</div>`;
+    h += itens.map(o => {
+      const extra = (o.diff !== null && o.diff > 0.005) ? `<div class="chq-diff">≈ ${brl(o.diff)} de diferença do valor buscado</div>` : "";
+      return cartao(o.c) + extra;
+    }).join("");
+    return h;
+  };
+
+  const lupa = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>`;
   let html = `
     <div class="resumo">
       <div class="stat ${pend.some(c=>diffDias(bomParaDe(c))<=0)?"r":"g"}"><div class="n" style="font-size:1.05rem">${brl(totalPend)}</div><div class="l">em cheques pendentes</div></div>
       <div class="stat v"><div class="n" style="font-size:1.05rem">${brl(totalComp)}</div><div class="l">compensados</div></div>
     </div>
-    ${pend.length ? `<div class="rotulo">Volume por dia — toque na barra pra ver quem recebe</div><div class="graf-card">${graficoCheques(pend)}</div>` : ""}
-    <div class="rotulo">Cheques pendentes</div>`;
-  html += pend.length
-    ? [...pend].sort((a,b)=> bomParaDe(a).localeCompare(bomParaDe(b))).map(cartao).join("")
-    : vazioCad("Toque no <b>+</b> pra registrar um cheque:<br>pra quem, valor, data e prazo.");
-  if(comp.length){
-    html += `<div class="rotulo" style="margin-top:16px">Compensados</div>`;
-    html += [...comp].sort((a,b)=> String(b.compensado_em||b.data).localeCompare(String(a.compensado_em||a.data))).map(cartao).join("");
-  }
+    <div class="chq-busca">
+      ${lupa}
+      <input id="chq-q" type="search" enterkeyhint="search" placeholder="Buscar por nome ou valor…" value="${esc(chequeBuscaQ)}">
+      <button id="chq-x" class="chq-x" aria-label="Limpar busca">×</button>
+    </div>
+    <div id="chq-corpo"></div>`;
   corpo.innerHTML = html;
-  corpo.querySelectorAll("[data-cheque]").forEach(el => el.onclick = (e) => { if(e.target.closest("[data-baixa]")) return; abrirModalCheque(el.dataset.cheque); });
-  corpo.querySelectorAll("[data-baixa]").forEach(b => b.onclick = (e) => { e.stopPropagation(); alternarBaixaCheque(b.dataset.baixa); });
-  corpo.querySelectorAll("[data-gdia]").forEach(r => r.onclick = () => abrirChequesDoDia(r.dataset.gdia));
-  corpo.querySelectorAll("[data-compensar]").forEach(b => b.onclick = (e) => { e.stopPropagation(); marcarCompensado(b.dataset.compensar); });
+
+  const cont = corpo.querySelector("#chq-corpo");
+  const inp = corpo.querySelector("#chq-q");
+  const btnX = corpo.querySelector("#chq-x");
+  const aplica = () => {
+    const q = inp.value;
+    chequeBuscaQ = q;
+    cont.innerHTML = q.trim() ? corpoBusca(q) : corpoPadrao();
+    bindCards(cont);
+    btnX.style.display = q ? "grid" : "none";
+  };
+  inp.oninput = aplica;
+  btnX.onclick = () => { inp.value = ""; chequeBuscaQ = ""; aplica(); inp.focus(); };
+  aplica();
 }
 
 function abrirModalCheque(id){
