@@ -289,6 +289,12 @@ body.leitura .cheque-card .nome, body.leitura .cheque-card .det, body.leitura .c
 .ia-toggle-falar.on{background:var(--ouro);color:#fff;border-color:var(--ouro)}
 .ia-ouvir{display:inline-flex;align-items:center;gap:4px;margin-top:6px;background:none;border:none;cursor:pointer;font-size:.75rem;color:var(--tinta-mole);opacity:.85;padding:0;font-family:inherit}
 .ia-ouvir:active{opacity:.5}
+.ia-uso{background:var(--card);border:1px solid var(--linha);border-radius:12px;padding:9px 12px;margin-bottom:8px}
+.ia-uso-top{display:flex;justify-content:space-between;align-items:center;font-size:.72rem;font-weight:700;color:var(--tinta-mole);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px}
+.ia-meta-lnk{border:none;background:none;color:var(--ouro-esc);font-weight:700;font-size:.72rem;font-family:inherit;cursor:pointer;padding:0}
+.ia-uso-track{height:9px;background:var(--linha);border-radius:6px;overflow:hidden}
+.ia-uso-fill{height:100%;border-radius:6px;transition:width .3s ease}
+.ia-uso-lbl{font-size:.75rem;color:var(--tinta-mole);margin-top:5px;text-align:right}
 .ia-acao{align-self:stretch;background:#fff6e6;border:1.5px solid var(--ouro);border-radius:14px;padding:12px 14px;margin:2px 0}
 .ia-acao .tit{font-weight:800;color:var(--ouro-esc);font-size:.85rem;margin-bottom:4px}
 .ia-acao .res{font-size:.9rem;color:var(--tinta);line-height:1.4}
@@ -516,7 +522,7 @@ body.leitura .cheque-card .nome, body.leitura .cheque-card .det, body.leitura .c
    ======================================================================= */
 const SUPABASE_URL      = "https://cadnmgaymgljmoadebkk.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uBKKvD_e5ef4326TvkFgcg_rRnjmTus";
-const APP_VER = "v83";
+const APP_VER = "v84";
 const SPLASH_MIN = 2400;
 const EMAIL_ADMIN = "jpferreira1356@icloud.com";
 const splashT0 = Date.now();                              // suba junto com o cache do sw.js
@@ -1006,6 +1012,7 @@ function abrirChatIA(){
       <h2 style="margin:0;flex:1">Analista de IA</h2>
       <button id="ia-falar" class="ia-toggle-falar" title="Ler as respostas em voz">🔇 Voz</button>
     </div>
+    <div id="ia-uso" class="ia-uso"></div>
     <div id="ia-msgs" class="ia-msgs">${bolhas}</div>
     <div class="ia-entrada">
       <textarea id="ia-pergunta" rows="1" placeholder="Fale ou escreva sua pergunta…"></textarea>
@@ -1038,6 +1045,56 @@ function abrirChatIA(){
     const sp = b.parentElement.querySelector(".ia-txt"); if(sp) falarTexto(sp.textContent);
   });
   const box = $("#ia-msgs"); box.scrollTop = box.scrollHeight;
+  atualizarBarraTokens();
+}
+function estimarTokens(txt){ return Math.ceil(String(txt||"").length / 4); }
+function fmtTok(n){
+  n = Number(n)||0;
+  if(n >= 1e6) return (n/1e6).toLocaleString("pt-BR",{maximumFractionDigits:2}) + " mi";
+  if(n >= 1e3) return (n/1e3).toLocaleString("pt-BR",{maximumFractionDigits:1}) + " mil";
+  return String(Math.round(n));
+}
+function tokensDoMes(){ const t = (state.config && state.config.ia_tokens) || {}; return Number(t[mesAtual()]) || 0; }
+function metaTokens(){ const t = (state.config && state.config.ia_tokens) || {}; return Number(t.meta) || 500000; }
+function atualizarBarraTokens(){
+  const el = $("#ia-uso"); if(!el) return;
+  const usados = tokensDoMes(), meta = metaTokens();
+  const pct = meta > 0 ? Math.min(100, usados/meta*100) : 0;
+  const cor = pct >= 90 ? "var(--vermelho)" : (pct >= 70 ? "var(--ouro)" : "var(--verde)");
+  el.innerHTML = `
+    <div class="ia-uso-top"><span>Tokens este mês (estimativa)</span><button id="ia-meta-btn" class="ia-meta-lnk">meta ${fmtTok(meta)} ✏️</button></div>
+    <div class="ia-uso-track"><div class="ia-uso-fill" style="width:${pct.toFixed(1)}%;background:${cor}"></div></div>
+    <div class="ia-uso-lbl">${fmtTok(usados)} de ${fmtTok(meta)} tokens · ${pct.toFixed(0)}%</div>`;
+  const mb = $("#ia-meta-btn"); if(mb) mb.onclick = abrirModalMetaTokens;
+}
+function registrarTokensIA(pergunta, resposta){
+  state.config = state.config || {};
+  const t = state.config.ia_tokens = state.config.ia_tokens || {};
+  const mes = mesAtual();
+  const usados = 1200 + estimarTokens(pergunta) + estimarTokens(resposta); // ~1200 de contexto/histórico
+  t[mes] = (Number(t[mes])||0) + usados;
+  atualizarBarraTokens();
+  dbw("queijaria_config").upsert({ familia_id:familiaId, ia_tokens:t }).then(()=>{}, ()=>{});
+}
+function abrirModalMetaTokens(){
+  const meta = metaTokens();
+  abrirFolha(`
+    <h2>Meta de tokens no mês</h2>
+    <p class="dica" style="margin-top:-6px">Defina quanto você quer usar por mês. A barrinha enche conforme o consumo estimado da IA.</p>
+    <div class="campo"><label>Meta (tokens)</label><input id="mt-val" type="number" inputmode="numeric" min="1000" step="1000" value="${meta}"></div>
+    <p class="dica" style="margin-top:-4px">Dica: 1 pergunta gasta ~1,5 a 3 mil tokens. 500 mil ≈ umas 200 perguntas.</p>
+    <button class="btn btn-primario" id="mt-salvar">Salvar meta</button>
+    <button class="btn btn-fantasma" id="mt-voltar" style="margin-top:6px">Voltar</button>`);
+  $("#mt-voltar").onclick = () => abrirChatIA();
+  $("#mt-salvar").onclick = () => {
+    const v = Math.max(1000, parseInt($("#mt-val").value)||0);
+    state.config = state.config || {};
+    const t = state.config.ia_tokens = state.config.ia_tokens || {};
+    t.meta = v;
+    dbw("queijaria_config").upsert({ familia_id:familiaId, ia_tokens:t }).then(()=>{}, ()=>{});
+    toast("Meta salva.");
+    abrirChatIA();
+  };
 }
 function ditadoIA(inp, btn){
   if(!inp) return;
@@ -1091,6 +1148,7 @@ async function enviarIA(){
       box.insertAdjacentHTML("beforeend", bolhaIA("assistant", data.resposta || "…"));
       iaHistorico.push({ role:"assistant", content:data.resposta||"" });
       if(iaFalar) falarTexto(data.resposta||"");
+      registrarTokensIA(pergunta, data.resposta||"");
       if(typeof data.restam === "number") $("#ia-rodape").textContent = `${data.restam} perguntas restantes hoje`;
     }
   }catch(e){
