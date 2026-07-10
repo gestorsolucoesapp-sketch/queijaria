@@ -502,7 +502,7 @@ body.leitura .cheque-card .nome, body.leitura .cheque-card .det, body.leitura .c
    ======================================================================= */
 const SUPABASE_URL      = "https://cadnmgaymgljmoadebkk.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uBKKvD_e5ef4326TvkFgcg_rRnjmTus";
-const APP_VER = "v75";
+const APP_VER = "v76";
 const SPLASH_MIN = 2400;
 const EMAIL_ADMIN = "jpferreira1356@icloud.com";
 const splashT0 = Date.now();                              // suba junto com o cache do sw.js
@@ -2523,13 +2523,16 @@ function renderCheques(corpo){
       ? `<span class="pill-venc pago">compensado ${dataBR(c.compensado_em)}</span>`
       : `<span class="pill-venc ${vencido?"on":""}">${vencido?"ATRASADO · bom p/ ":"bom p/ "}${dataBR(bom)}</span>`;
     const numero = c.numero ? ` · nº ${esc(c.numero)}` : "";
+    const det = (Number(c.prazo_dias)||0) > 0
+      ? `preenchido ${dataBR(c.data)}${numero} · prazo ${prazoRot(c.prazo_dias)}`
+      : `data informada direto${numero}`;
     return `<div class="tipo cheque-card ${cls}" data-cheque="${c.id}">
       <button class="check-baixa ${c.compensado?"on":""}" data-baixa="${c.id}" title="${c.compensado?"Desfazer baixa":"Dar baixa (compensado)"}">
         ${c.compensado?`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`:""}
       </button>
       <div style="flex:1">
         <div class="nome">${esc(c.para||"—")} ${pill}</div>
-        <div class="det">preenchido ${dataBR(c.data)}${numero} · prazo ${prazoRot(c.prazo_dias)}</div>
+        <div class="det">${det}</div>
       </div>
       <div class="preco ${c.compensado?"riscado":""}">${brl(c.valor)}</div>
     </div>`;
@@ -2623,19 +2626,46 @@ function abrirModalCheque(id){
       <div class="campo"><label>Valor (R$)</label><input id="c-valor" type="number" inputmode="decimal" value="${c.valor??""}" placeholder="0,00"></div>
       <div class="campo"><label>Nº do cheque (opcional)</label><input id="c-num" inputmode="numeric" value="${esc(c.numero||"")}" placeholder="—"></div>
     </div>
-    <div class="linha-campos">
-      <div class="campo"><label>Data de preenchimento</label><input id="c-data" type="date" value="${c.data||hoje()}"></div>
-      <div class="campo"><label>Prazo (dias)</label><input id="c-prazo" type="number" inputmode="numeric" min="0" value="${c.prazo_dias??30}"></div>
+    <div class="rotulo" style="margin-bottom:8px">Quando o cheque cai</div>
+    <div class="seg-linha" style="margin-bottom:12px">
+      <button type="button" class="seg-pag" data-modo="prazo">Prazo em dias</button>
+      <button type="button" class="seg-pag" data-modo="direta">Data direta</button>
+    </div>
+    <div id="c-bloco-prazo">
+      <div class="linha-campos">
+        <div class="campo"><label>Data de preenchimento</label><input id="c-data" type="date" value="${c.data||hoje()}"></div>
+        <div class="campo"><label>Prazo (dias)</label><input id="c-prazo" type="number" inputmode="numeric" min="0" value="${c.prazo_dias??30}"></div>
+      </div>
+    </div>
+    <div id="c-bloco-direta" style="display:none">
+      <div class="campo"><label>Data de cair (vencimento)</label><input id="c-vdata" type="date" value="${c.data||hoje()}"></div>
     </div>
     <div class="previa" id="c-previa"></div>
     <div class="erro" id="c-erro"></div>
     <button class="btn btn-primario" id="c-salvar">Salvar</button>
     ${botaoExcluir(id?"c-excluir":"","Excluir cheque")}`);
+  const modoInicial = (id && (Number(c.prazo_dias)||0) === 0) ? "direta" : "prazo";
+  let modoCheque = modoInicial;
   const previa = () => {
-    const bom = addDias($("#c-data").value||hoje(), parseInt($("#c-prazo").value)||0);
+    const bom = modoCheque === "direta"
+      ? ($("#c-vdata").value || hoje())
+      : addDias($("#c-data").value||hoje(), parseInt($("#c-prazo").value)||0);
     $("#c-previa").innerHTML = `Bom para: <b>${dataBR(bom)}</b>`;
   };
-  $("#c-data").onchange = previa; $("#c-prazo").oninput = previa; previa();
+  const setModo = (m) => {
+    modoCheque = m;
+    $$("[data-modo]").forEach(b => b.classList.toggle("ativo", b.dataset.modo===m));
+    $("#c-bloco-prazo").style.display  = m==="prazo"  ? "" : "none";
+    $("#c-bloco-direta").style.display = m==="direta" ? "" : "none";
+    previa();
+  };
+  $$("[data-modo]").forEach(b => b.onclick = () => {
+    if(b.dataset.modo === "direta") $("#c-vdata").value = $("#c-data").value || hoje();
+    if(b.dataset.modo === "prazo"  && $("#c-vdata").value) $("#c-data").value = $("#c-vdata").value;
+    setModo(b.dataset.modo);
+  });
+  $("#c-data").onchange = previa; $("#c-prazo").oninput = previa; $("#c-vdata").onchange = previa;
+  setModo(modoInicial);
   $("#c-salvar").onclick = () => salvarCheque(id);
   if(id) $("#c-excluir").onclick = () => confirmarComSenha("Apagar este cheque?", () => excluirCheque(id));
 }
@@ -2644,8 +2674,10 @@ async function salvarCheque(id){
   const valor = parseFloat($("#c-valor").value)||0;
   if(!para){ $("#c-erro").textContent = "Diga pra quem é o cheque."; return; }
   if(valor <= 0){ $("#c-erro").textContent = "Informe o valor."; return; }
-  const dados = { para, valor, numero: $("#c-num").value.trim()||null,
-    data: $("#c-data").value||hoje(), prazo_dias: Math.max(0, parseInt($("#c-prazo").value)||0) };
+  const direta = $("#c-bloco-direta") && $("#c-bloco-direta").style.display !== "none";
+  const data = direta ? ($("#c-vdata").value || hoje()) : ($("#c-data").value || hoje());
+  const prazo_dias = direta ? 0 : Math.max(0, parseInt($("#c-prazo").value)||0);
+  const dados = { para, valor, numero: $("#c-num").value.trim()||null, data, prazo_dias };
   if(id){
     const c = state.cheques.find(x=>x.id===id);
     if(!c){ fecharModal(); toast("Registro não encontrado. Recarregue o app.", true); return; }
