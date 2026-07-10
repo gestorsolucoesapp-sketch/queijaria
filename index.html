@@ -282,6 +282,9 @@ body.leitura .cheque-card .nome, body.leitura .cheque-card .det, body.leitura .c
 .ia-entrada{display:flex;gap:8px}
 .ia-entrada input{flex:1;padding:12px 14px;border:1px solid var(--linha-forte);border-radius:12px;font-size:1rem;font-family:inherit;background:var(--card)}
 .ia-btn-enviar{width:48px;border:none;border-radius:12px;background:var(--ouro);color:#fff;font-size:1.2rem;cursor:pointer}
+.ia-btn-voz{width:44px;flex:none;border:none;border-radius:12px;background:var(--linha);color:var(--tinta-mole);display:grid;place-items:center;cursor:pointer}
+.ia-btn-voz.ouvindo{background:var(--vermelho);color:#fff;animation:pulseVoz 1s ease-in-out infinite}
+@keyframes pulseVoz{0%,100%{opacity:1}50%{opacity:.5}}
 .ia-sugestoes{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
 .ia-sug{background:var(--card);border:1px solid var(--linha);border-radius:20px;padding:6px 12px;font-size:.78rem;font-family:inherit;cursor:pointer;color:var(--tinta)}
 .alerta-ciclo{background:#fdeceb;border:1.5px solid var(--vermelho);border-radius:var(--r);padding:13px 15px;margin-bottom:14px;cursor:pointer;box-shadow:var(--sombra)}
@@ -502,7 +505,7 @@ body.leitura .cheque-card .nome, body.leitura .cheque-card .det, body.leitura .c
    ======================================================================= */
 const SUPABASE_URL      = "https://cadnmgaymgljmoadebkk.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uBKKvD_e5ef4326TvkFgcg_rRnjmTus";
-const APP_VER = "v78";
+const APP_VER = "v79";
 const SPLASH_MIN = 2400;
 const EMAIL_ADMIN = "jpferreira1356@icloud.com";
 const splashT0 = Date.now();                              // suba junto com o cache do sw.js
@@ -645,7 +648,10 @@ function abrirChatIA(){
     <p class="dica" style="margin-top:-6px">Pergunte sobre leite, fornecedores, pagamentos, cheques…</p>
     <div id="ia-msgs" class="ia-msgs"></div>
     <div class="ia-entrada">
-      <input id="ia-input" placeholder="Ex.: quanto tenho a pagar essa semana?" autocomplete="off">
+      <input id="ia-input" placeholder="Fale ou escreva sua pergunta…" autocomplete="off">
+      <button id="ia-voz" class="ia-btn-voz" title="Falar" aria-label="Falar">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+      </button>
       <button id="ia-enviar" class="ia-btn-enviar">➤</button>
     </div>
     <div class="ia-sugestoes">
@@ -657,6 +663,36 @@ function abrirChatIA(){
   $("#ia-enviar").onclick = enviarIA;
   $("#ia-input").addEventListener("keydown", e => { if(e.key==="Enter") enviarIA(); });
   $$(".ia-sug").forEach(b => b.onclick = () => { $("#ia-input").value = b.dataset.sug; enviarIA(); });
+  if(iaVozSuportada()) $("#ia-voz").onclick = toggleVozIA; else $("#ia-voz").style.display = "none";
+}
+let iaRec = null, iaOuvindo = false;
+function iaVozSuportada(){ return "webkitSpeechRecognition" in window || "SpeechRecognition" in window; }
+function toggleVozIA(){
+  if(iaOuvindo){ try{ iaRec && iaRec.stop(); }catch(e){} return; }
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if(!SR){ toast("Seu navegador não suporta ditado por voz.", true); return; }
+  const inp = $("#ia-input"); if(!inp) return;
+  const base = (inp.value||"").trim();
+  iaRec = new SR();
+  iaRec.lang = "pt-BR";
+  iaRec.interimResults = true;
+  iaRec.continuous = false;
+  iaRec.onstart = () => { iaOuvindo = true; $("#ia-voz") && $("#ia-voz").classList.add("ouvindo"); inp.placeholder = "Ouvindo… fale agora"; };
+  iaRec.onresult = (ev) => {
+    let txt = "";
+    for(let i=0;i<ev.results.length;i++) txt += ev.results[i][0].transcript;
+    inp.value = (base ? base + " " : "") + txt;
+  };
+  iaRec.onerror = (ev) => {
+    toast(ev.error==="not-allowed" || ev.error==="service-not-allowed"
+      ? "Permita o acesso ao microfone pra usar a voz." : "Não consegui ouvir. Tente de novo.", true);
+  };
+  iaRec.onend = () => {
+    iaOuvindo = false;
+    const b = $("#ia-voz"); if(b) b.classList.remove("ouvindo");
+    if(inp){ inp.placeholder = "Fale ou escreva sua pergunta…"; inp.focus(); }
+  };
+  try{ iaRec.start(); }catch(e){ toast("Não consegui iniciar o microfone.", true); }
 }
 function pintarChat(){
   const box = $("#ia-msgs"); if(!box) return;
