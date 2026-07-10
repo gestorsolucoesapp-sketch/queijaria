@@ -285,6 +285,10 @@ body.leitura .cheque-card .nome, body.leitura .cheque-card .det, body.leitura .c
 .ia-btn-voz{width:44px;flex:none;border:none;border-radius:12px;background:var(--linha);color:var(--tinta-mole);display:grid;place-items:center;cursor:pointer}
 .ia-btn-voz.ouvindo{background:var(--vermelho);color:#fff;animation:pulseVoz 1s ease-in-out infinite}
 @keyframes pulseVoz{0%,100%{opacity:1}50%{opacity:.5}}
+.ia-toggle-falar{border:1px solid var(--linha-forte);background:var(--card);color:var(--tinta-mole);border-radius:20px;padding:5px 11px;font-size:.75rem;font-family:inherit;font-weight:700;cursor:pointer;flex:none}
+.ia-toggle-falar.on{background:var(--ouro);color:#fff;border-color:var(--ouro)}
+.ia-ouvir{display:inline-flex;align-items:center;gap:4px;margin-top:6px;background:none;border:none;cursor:pointer;font-size:.75rem;color:var(--tinta-mole);opacity:.85;padding:0;font-family:inherit}
+.ia-ouvir:active{opacity:.5}
 .ia-sugestoes{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
 .ia-sug{background:var(--card);border:1px solid var(--linha);border-radius:20px;padding:6px 12px;font-size:.78rem;font-family:inherit;cursor:pointer;color:var(--tinta)}
 .alerta-ciclo{background:#fdeceb;border:1.5px solid var(--vermelho);border-radius:var(--r);padding:13px 15px;margin-bottom:14px;cursor:pointer;box-shadow:var(--sombra)}
@@ -505,7 +509,7 @@ body.leitura .cheque-card .nome, body.leitura .cheque-card .det, body.leitura .c
    ======================================================================= */
 const SUPABASE_URL      = "https://cadnmgaymgljmoadebkk.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uBKKvD_e5ef4326TvkFgcg_rRnjmTus";
-const APP_VER = "v79";
+const APP_VER = "v80";
 const SPLASH_MIN = 2400;
 const EMAIL_ADMIN = "jpferreira1356@icloud.com";
 const splashT0 = Date.now();                              // suba junto com o cache do sw.js
@@ -624,7 +628,7 @@ function contextoQueijaria(){
     const f=aPagarFornecedores[n];
     return `- ${n}: ${num(f.litros)} L, a pagar ${brl(f.valor)}${f.fechado>0?` (ciclo fechado ${brl(f.fechado)})`:""}`;
   }).join("\n");
-  const chqLista = chequesPend.slice(0,20).map(c=>`- ${c.para||"?"}: ${brl(c.valor)}, cai ${dataBR(bomParaDe(c))}${diffDias(bomParaDe(c))<=0?" (ATRASADO)":""}`).join("\n");
+  const chqLista = chequesPend.slice(0,40).map(c=>`- ${c.para||"?"}${c.numero?` (nº ${c.numero})`:""}: ${brl(c.valor)}, cai ${dataBR(bomParaDe(c))}${diffDias(bomParaDe(c))<=0?" (ATRASADO)":""}`).join("\n");
 
   return `Você é o assistente da Queijaria Bene, um laticínio. Responda em português do Brasil, de forma curta, clara e prática. Use os dados abaixo pra responder sobre leite, fornecedores, pagamentos e cheques. Valores em reais.
 
@@ -645,7 +649,10 @@ Se te perguntarem algo fora desses dados, responda com bom senso mas avise que n
 function abrirChatIA(){
   abrirFolha(`
     <h2>Assistente 🧀</h2>
-    <p class="dica" style="margin-top:-6px">Pergunte sobre leite, fornecedores, pagamentos, cheques…</p>
+    <div style="display:flex;align-items:center;gap:8px;margin-top:-6px;margin-bottom:6px">
+      <p class="dica" style="margin:0;flex:1">Fale no 🎤 ou escreva. Pergunte sobre leite, cheques, pagamentos…</p>
+      <button id="ia-falar" class="ia-toggle-falar" title="Ler as respostas em voz">🔇 Voz</button>
+    </div>
     <div id="ia-msgs" class="ia-msgs"></div>
     <div class="ia-entrada">
       <input id="ia-input" placeholder="Fale ou escreva sua pergunta…" autocomplete="off">
@@ -664,6 +671,18 @@ function abrirChatIA(){
   $("#ia-input").addEventListener("keydown", e => { if(e.key==="Enter") enviarIA(); });
   $$(".ia-sug").forEach(b => b.onclick = () => { $("#ia-input").value = b.dataset.sug; enviarIA(); });
   if(iaVozSuportada()) $("#ia-voz").onclick = toggleVozIA; else $("#ia-voz").style.display = "none";
+  const bf = $("#ia-falar");
+  if("speechSynthesis" in window){
+    bf.classList.toggle("on", iaFalar);
+    bf.textContent = iaFalar ? "🔊 Voz" : "🔇 Voz";
+    bf.onclick = () => {
+      iaFalar = !iaFalar;
+      bf.classList.toggle("on", iaFalar);
+      bf.textContent = iaFalar ? "🔊 Voz" : "🔇 Voz";
+      if(!iaFalar) pararFala();
+      else toast("Vou ler as respostas em voz alta.");
+    };
+  } else { bf.style.display = "none"; }
 }
 let iaRec = null, iaOuvindo = false;
 function iaVozSuportada(){ return "webkitSpeechRecognition" in window || "SpeechRecognition" in window; }
@@ -694,10 +713,34 @@ function toggleVozIA(){
   };
   try{ iaRec.start(); }catch(e){ toast("Não consegui iniciar o microfone.", true); }
 }
+let iaFalar = false;
+function vozPtBr(){
+  const vs = ("speechSynthesis" in window) ? speechSynthesis.getVoices() : [];
+  return vs.find(v=>/pt[-_]?BR/i.test(v.lang)) || vs.find(v=>/^pt/i.test(v.lang)) || null;
+}
+function falarTexto(txt){
+  if(!("speechSynthesis" in window) || !txt) return;
+  try{
+    speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(String(txt));
+    u.lang = "pt-BR";
+    const v = vozPtBr(); if(v) u.voice = v;
+    u.rate = 1; u.pitch = 1;
+    speechSynthesis.speak(u);
+  }catch(e){}
+}
+function pararFala(){ try{ if("speechSynthesis" in window) speechSynthesis.cancel(); }catch(e){} }
 function pintarChat(){
   const box = $("#ia-msgs"); if(!box) return;
   if(!iaHist.length){ box.innerHTML = `<div class="ia-vazio">Oi! Sou o assistente da Queijaria Bene. Como posso ajudar?</div>`; return; }
-  box.innerHTML = iaHist.map(m => `<div class="ia-msg ${m.role}">${esc(m.content).replace(/\n/g,"<br>")}</div>`).join("");
+  box.innerHTML = iaHist.map((m,i) => {
+    const corpo = esc(m.content).replace(/\n/g,"<br>");
+    if(m.role==="assistant" && m.content && m.content!=="…" && ("speechSynthesis" in window)){
+      return `<div class="ia-msg assistant">${corpo}<br><button class="ia-ouvir" data-i="${i}">🔊 ouvir</button></div>`;
+    }
+    return `<div class="ia-msg ${m.role}">${corpo}</div>`;
+  }).join("");
+  box.querySelectorAll(".ia-ouvir").forEach(b => b.onclick = () => falarTexto(iaHist[+b.dataset.i]?.content));
   box.scrollTop = box.scrollHeight;
 }
 async function enviarIA(){
@@ -714,6 +757,7 @@ async function enviarIA(){
     if(error) throw error;
     const resposta = (data && (data.reply || data.text || data.content)) || "Não consegui responder agora.";
     iaHist[iaHist.length-1] = { role:"assistant", content:resposta };
+    if(iaFalar) falarTexto(resposta);
   } catch(e){
     iaHist[iaHist.length-1] = { role:"assistant", content:"Ops, não consegui responder. Verifique a conexão ou tente de novo." };
   }
@@ -2940,7 +2984,7 @@ function renderInsumos(corpo){
 }
 
 /* ===================== modais ===================== */
-function fecharModal(){ $("#modal-host").innerHTML = ""; }
+function fecharModal(){ if("speechSynthesis" in window){ try{ speechSynthesis.cancel(); }catch(e){} } $("#modal-host").innerHTML = ""; }
 function abrirFolha(inner){
   $("#modal-host").innerHTML =
     `<div class="overlay" id="ov"><div class="folha"><div class="pega"></div>${inner}</div></div>`;
