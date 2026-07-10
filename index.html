@@ -502,7 +502,7 @@ body.leitura .cheque-card .nome, body.leitura .cheque-card .det, body.leitura .c
    ======================================================================= */
 const SUPABASE_URL      = "https://cadnmgaymgljmoadebkk.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uBKKvD_e5ef4326TvkFgcg_rRnjmTus";
-const APP_VER = "v76";
+const APP_VER = "v77";
 const SPLASH_MIN = 2400;
 const EMAIL_ADMIN = "jpferreira1356@icloud.com";
 const splashT0 = Date.now();                              // suba junto com o cache do sw.js
@@ -2621,6 +2621,10 @@ function abrirModalCheque(id){
   const c = state.cheques.find(x=>x.id===id) || {};
   abrirFolha(`
     <h2>${id?"Editar":"Novo"} cheque</h2>
+    ${(id && c.compensado) ? `<div class="alerta-cheque" style="background:#eef7e9;border-color:var(--verde);cursor:default;margin-bottom:14px">
+      <div class="ac-ic">✅</div>
+      <div><div class="ac-tit" style="color:var(--verde)">Cheque compensado</div><div class="ac-sub">Baixa dada em ${dataBR(c.compensado_em)}</div></div>
+    </div>` : ""}
     <div class="campo"><label>Para</label><input id="c-para" value="${esc(c.para||"")}" placeholder="Pra quem é o cheque"></div>
     <div class="linha-campos">
       <div class="campo"><label>Valor (R$)</label><input id="c-valor" type="number" inputmode="decimal" value="${c.valor??""}" placeholder="0,00"></div>
@@ -2643,6 +2647,7 @@ function abrirModalCheque(id){
     <div class="previa" id="c-previa"></div>
     <div class="erro" id="c-erro"></div>
     <button class="btn btn-primario" id="c-salvar">Salvar</button>
+    ${(id && c.compensado) ? `<button class="btn btn-fantasma" id="c-voltar" style="margin-top:6px;color:var(--verde);font-weight:700">↩︎ Voltar cheque (desfazer baixa)</button>` : ""}
     ${botaoExcluir(id?"c-excluir":"","Excluir cheque")}`);
   const modoInicial = (id && (Number(c.prazo_dias)||0) === 0) ? "direta" : "prazo";
   let modoCheque = modoInicial;
@@ -2667,6 +2672,7 @@ function abrirModalCheque(id){
   $("#c-data").onchange = previa; $("#c-prazo").oninput = previa; $("#c-vdata").onchange = previa;
   setModo(modoInicial);
   $("#c-salvar").onclick = () => salvarCheque(id);
+  if(id && c.compensado) $("#c-voltar").onclick = () => alternarBaixaCheque(id);
   if(id) $("#c-excluir").onclick = () => confirmarComSenha("Apagar este cheque?", () => excluirCheque(id));
 }
 async function salvarCheque(id){
