@@ -502,7 +502,7 @@ body.leitura .cheque-card .nome, body.leitura .cheque-card .det, body.leitura .c
    ======================================================================= */
 const SUPABASE_URL      = "https://cadnmgaymgljmoadebkk.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uBKKvD_e5ef4326TvkFgcg_rRnjmTus";
-const APP_VER = "v77";
+const APP_VER = "v78";
 const SPLASH_MIN = 2400;
 const EMAIL_ADMIN = "jpferreira1356@icloud.com";
 const splashT0 = Date.now();                              // suba junto com o cache do sw.js
@@ -2479,6 +2479,12 @@ function graficoCheques(pend){
     out += `<text x="${(x+BW/2).toFixed(1)}" y="${(y-6).toFixed(1)}" text-anchor="middle" font-size="9" fill="#8a7f68" font-family="'IBM Plex Mono',monospace">${Math.round(v)}</text>`;
     out += `<text x="${(x+BW/2).toFixed(1)}" y="${H-14}" text-anchor="middle" font-size="9" fill="#8a7f68" font-family="'IBM Plex Mono',monospace">${d.slice(8,10)}/${d.slice(5,7)}</text>`;
   });
+  // linha de média (valor médio que cai por dia)
+  const media = dias.reduce((s,d)=>s+porDia[d],0) / n;
+  const yM = H-30 - (media/max)*(H-52);
+  out += `<line x1="${PAD}" y1="${yM.toFixed(1)}" x2="${(W-PAD).toFixed(1)}" y2="${yM.toFixed(1)}" stroke="var(--azul)" stroke-width="1.5" stroke-dasharray="5 4"/>`;
+  out += `<rect x="${PAD}" y="${(yM-14).toFixed(1)}" width="${(String(Math.round(media)).length*6+42)}" height="13" rx="3" fill="var(--azul)"/>`;
+  out += `<text x="${PAD+5}" y="${(yM-4).toFixed(1)}" font-size="9" fill="#fff" font-family="'IBM Plex Mono',monospace">média ${Math.round(media)}</text>`;
   return `<div class="graf-scroll"><svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" style="display:block;max-width:none">${out}</svg></div>
     ${n>6?`<div class="graf-dica-scroll">← arraste pro lado pra ver todos os dias →</div>`:""}`;
 }
@@ -2655,7 +2661,15 @@ function abrirModalCheque(id){
     const bom = modoCheque === "direta"
       ? ($("#c-vdata").value || hoje())
       : addDias($("#c-data").value||hoje(), parseInt($("#c-prazo").value)||0);
-    $("#c-previa").innerHTML = `Bom para: <b>${dataBR(bom)}</b>`;
+    const valorAtual = parseFloat($("#c-valor").value)||0;
+    const mesmoDia = state.cheques.filter(x => !x.compensado && x.id !== id && bomParaDe(x) === bom);
+    let aviso = "";
+    if(mesmoDia.length){
+      const tot = mesmoDia.reduce((s,x)=> s+(Number(x.valor)||0),0);
+      const comEste = valorAtual > 0 ? ` — com este, <b>${brl(tot+valorAtual)}</b> no dia` : "";
+      aviso = `<div style="margin-top:6px;color:var(--vermelho);font-size:.82rem;line-height:1.35">⚠️ Nesse dia já ${mesmoDia.length===1?"cai <b>1 cheque</b>":"caem <b>"+mesmoDia.length+" cheques</b>"} de <b>${brl(tot)}</b>${comEste}</div>`;
+    }
+    $("#c-previa").innerHTML = `Bom para: <b>${dataBR(bom)}</b>${aviso}`;
   };
   const setModo = (m) => {
     modoCheque = m;
@@ -2669,7 +2683,7 @@ function abrirModalCheque(id){
     if(b.dataset.modo === "prazo"  && $("#c-vdata").value) $("#c-data").value = $("#c-vdata").value;
     setModo(b.dataset.modo);
   });
-  $("#c-data").onchange = previa; $("#c-prazo").oninput = previa; $("#c-vdata").onchange = previa;
+  $("#c-data").onchange = previa; $("#c-prazo").oninput = previa; $("#c-vdata").onchange = previa; $("#c-valor").oninput = previa;
   setModo(modoInicial);
   $("#c-salvar").onclick = () => salvarCheque(id);
   if(id && c.compensado) $("#c-voltar").onclick = () => alternarBaixaCheque(id);
