@@ -516,7 +516,7 @@ body.leitura .cheque-card .nome, body.leitura .cheque-card .det, body.leitura .c
    ======================================================================= */
 const SUPABASE_URL      = "https://cadnmgaymgljmoadebkk.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uBKKvD_e5ef4326TvkFgcg_rRnjmTus";
-const APP_VER = "v82";
+const APP_VER = "v83";
 const SPLASH_MIN = 2400;
 const EMAIL_ADMIN = "jpferreira1356@icloud.com";
 const splashT0 = Date.now();                              // suba junto com o cache do sw.js
@@ -734,11 +734,25 @@ function vozPtBr(){
   const vs = ("speechSynthesis" in window) ? speechSynthesis.getVoices() : [];
   return vs.find(v=>/pt[-_]?BR/i.test(v.lang)) || vs.find(v=>/^pt/i.test(v.lang)) || null;
 }
+function limparParaFala(txt){
+  return String(txt||"")
+    .replace(/```[\s\S]*?```/g, " ")     // blocos de código
+    .replace(/`([^`]*)`/g, "$1")          // código inline
+    .replace(/\*\*([^*]+)\*\*/g, "$1")    // **negrito**
+    .replace(/\*([^*]+)\*/g, "$1")        // *itálico*
+    .replace(/^\s*[\*\-•]\s+/gm, "")       // marcadores de lista no início da linha
+    .replace(/#{1,6}\s*/g, "")             // # títulos
+    .replace(/[*_#`>]/g, "")               // qualquer resto de markdown
+    .replace(/[ \t]{2,}/g, " ")
+    .trim();
+}
 function falarTexto(txt){
-  if(!("speechSynthesis" in window) || !txt) return;
+  if(!("speechSynthesis" in window)) return;
+  const limpo = limparParaFala(txt);
+  if(!limpo) return;
   try{
     speechSynthesis.cancel();
-    const u = new SpeechSynthesisUtterance(String(txt));
+    const u = new SpeechSynthesisUtterance(limpo);
     u.lang = "pt-BR";
     const v = vozPtBr(); if(v) u.voice = v;
     u.rate = 1; u.pitch = 1;
