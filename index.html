@@ -522,7 +522,7 @@ body.leitura .cheque-card .nome, body.leitura .cheque-card .det, body.leitura .c
    ======================================================================= */
 const SUPABASE_URL      = "https://cadnmgaymgljmoadebkk.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uBKKvD_e5ef4326TvkFgcg_rRnjmTus";
-const APP_VER = "v86";
+const APP_VER = "v87";
 const SPLASH_MIN = 2400;
 const EMAIL_ADMIN = "jpferreira1356@icloud.com";
 const splashT0 = Date.now();                              // suba junto com o cache do sw.js
@@ -1483,6 +1483,7 @@ function renderInicio(){
   }).filter(Boolean).sort((a,b)=> a.faltam - b.faltam);
 
   if(proxCiclos.length){
+    proxCiclosCache = proxCiclos;
     const p = proxCiclos[0];
     const urg = p.faltam <= 2;
     const quando = p.faltam === 0 ? "fecha <b>hoje</b>"
@@ -1496,6 +1497,7 @@ function renderInicio(){
       </div>
       <div class="ac-sub" style="margin-top:4px"><b>${esc(p.f.nome)}</b> — ${quando} (fecha ${dataBR(p.fim)}) · ${num(p.litros)} L até agora</div>
       ${outros ? `<div class="cf-lista" style="margin-top:6px">${outros}</div>` : ""}
+      <div class="ac-sub" style="margin-top:6px">toque pra ver todos os ciclos${proxCiclos.length>3?` (+${proxCiclos.length-3})`:""}</div>
     </div>`;
   }
 
@@ -1539,7 +1541,31 @@ function renderInicio(){
   const ac = $("#alerta-ciclo");
   if(ac) ac.onclick = () => { leiteAba = "apagar"; irPara("leite"); };
   const ap = $("#alerta-proximo");
-  if(ap) ap.onclick = () => irPara("leite");
+  if(ap) ap.onclick = abrirTodosCiclos;
+}
+let proxCiclosCache = [];
+function abrirTodosCiclos(){
+  const lista = proxCiclosCache;
+  if(!lista.length){ toast("Nenhum ciclo em aberto."); return; }
+  const linhas = lista.map((o,i) => {
+    const urg = o.faltam <= 2;
+    const quando = o.faltam === 0 ? "fecha hoje" : o.faltam === 1 ? "fecha amanhã" : `faltam ${o.faltam} dias`;
+    return `<div class="tipo" data-cic="${o.f.id}" style="cursor:pointer;${urg?"border-left:4px solid var(--ouro)":""}">
+      <div style="flex:1">
+        <div class="nome">${esc(o.f.nome)}</div>
+        <div class="det" style="${urg?"color:var(--ouro-esc);font-weight:700":""}">${quando} · fecha ${dataBR(o.fim)} · ${num(o.litros)} L</div>
+      </div>
+      <div class="preco">${brl(o.valor)}</div>
+    </div>`;
+  }).join("");
+  const total = lista.reduce((s,o)=> s+o.valor, 0);
+  abrirFolha(`
+    <h2>Ciclos em aberto</h2>
+    <p class="dica" style="margin-top:-6px">${lista.length} ${lista.length===1?"fornecedor":"fornecedores"} · ${brl(total)} acumulado. Toque num nome pra ver o detalhe.</p>
+    ${linhas}
+    <button class="btn btn-fantasma" id="tc-fechar" style="margin-top:10px">Fechar</button>`);
+  $("#tc-fechar").onclick = fecharModal;
+  $$("[data-cic]").forEach(el => el.onclick = () => { fecharModal(); abrirDetalheFornecedor(el.dataset.cic); });
 }
 function statusPeso(s){ return {pronto:0,curando:1,vendido:2,descartado:3}[s] ?? 9; }
 
