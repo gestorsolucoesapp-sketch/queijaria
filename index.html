@@ -522,7 +522,7 @@ body.leitura .cheque-card .nome, body.leitura .cheque-card .det, body.leitura .c
    ======================================================================= */
 const SUPABASE_URL      = "https://cadnmgaymgljmoadebkk.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uBKKvD_e5ef4326TvkFgcg_rRnjmTus";
-const APP_VER = "v85";
+const APP_VER = "v86";
 const SPLASH_MIN = 2400;
 const EMAIL_ADMIN = "jpferreira1356@icloud.com";
 const splashT0 = Date.now();                              // suba junto com o cache do sw.js
@@ -1464,6 +1464,41 @@ function renderInicio(){
     </div>`;
   }
 
+  // próximo ciclo a fechar (por fornecedor)
+  const proxCiclos = state.fornecedores.map(f => {
+    const recs = state.recebimentos.filter(r => r.fornecedor_id === f.id);
+    if(!recs.length) return null;
+    const prazo = Number(f.prazo_pagamento)||30;
+    const ancora = recs.map(r=>r.data).sort()[0];
+    const dc = diasEntre(ancora, hoje());
+    if(dc < 0) return null;
+    const cAtual = Math.floor(dc / prazo);
+    const fim = addDias(ancora, (cAtual+1)*prazo - 1);   // último dia do ciclo em aberto
+    const faltam = diasEntre(hoje(), fim);
+    const ini = addDias(ancora, cAtual*prazo);
+    const doCiclo = recs.filter(r => r.data >= ini && r.data <= fim);
+    const litros = doCiclo.reduce((s,r)=> s+(Number(r.litros)||0),0);
+    const valor  = doCiclo.reduce((s,r)=> s+(Number(r.valor_total)||0),0);
+    return { f, fim, faltam, litros, valor };
+  }).filter(Boolean).sort((a,b)=> a.faltam - b.faltam);
+
+  if(proxCiclos.length){
+    const p = proxCiclos[0];
+    const urg = p.faltam <= 2;
+    const quando = p.faltam === 0 ? "fecha <b>hoje</b>"
+      : p.faltam === 1 ? "fecha <b>amanhã</b>"
+      : `faltam <b>${p.faltam} dias</b>`;
+    const outros = proxCiclos.slice(1,3).map(o =>
+      `<div class="cf-linha"><span>${esc(o.f.nome)} · ${o.faltam===0?"hoje":o.faltam===1?"amanhã":o.faltam+" dias"}</span><span class="cf-val">${brl(o.valor)}</span></div>`).join("");
+    html += `<div class="alerta-ciclo" id="alerta-proximo" style="background:${urg?"#fff6e6":"var(--card)"};border-color:${urg?"var(--ouro)":"var(--linha-forte)"}">
+      <div class="ac-tit" style="color:${urg?"var(--ouro-esc)":"var(--tinta)"};display:flex;justify-content:space-between;align-items:center">
+        <span>⏳ Próximo ciclo a fechar</span><span>${brl(p.valor)}</span>
+      </div>
+      <div class="ac-sub" style="margin-top:4px"><b>${esc(p.f.nome)}</b> — ${quando} (fecha ${dataBR(p.fim)}) · ${num(p.litros)} L até agora</div>
+      ${outros ? `<div class="cf-lista" style="margin-top:6px">${outros}</div>` : ""}
+    </div>`;
+  }
+
   if(proximo){
     const { l, c } = proximo;
     html += `
@@ -1503,6 +1538,8 @@ function renderInicio(){
   if(al) al.onclick = () => { leiteAba = "apagar"; irPara("cheques"); };
   const ac = $("#alerta-ciclo");
   if(ac) ac.onclick = () => { leiteAba = "apagar"; irPara("leite"); };
+  const ap = $("#alerta-proximo");
+  if(ap) ap.onclick = () => irPara("leite");
 }
 function statusPeso(s){ return {pronto:0,curando:1,vendido:2,descartado:3}[s] ?? 9; }
 
