@@ -522,7 +522,7 @@ body.leitura .cheque-card .nome, body.leitura .cheque-card .det, body.leitura .c
    ======================================================================= */
 const SUPABASE_URL      = "https://cadnmgaymgljmoadebkk.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uBKKvD_e5ef4326TvkFgcg_rRnjmTus";
-const APP_VER = "v87";
+const APP_VER = "v88";
 const SPLASH_MIN = 2400;
 const EMAIL_ADMIN = "jpferreira1356@icloud.com";
 const splashT0 = Date.now();                              // suba junto com o cache do sw.js
@@ -2094,10 +2094,12 @@ function abrirDetalheFornecedor(fid){
   const segPrazo = [1,7,15,30].map(p =>
     `<button class="seg-prazo ${p===prazo?"on":""}" data-prazo="${p}">${p===1?"1 dia":p+" dias"}</button>`).join("");
 
+  const abertosDet = recs.filter(r => r.ciclo_fechado !== true && !r.pago);
   abrirFolha(`
     <h2>${esc(f.nome)}</h2>
     <p class="dica" style="margin-top:-6px">${num(totLitros)} L no total · ${brl(totValor)}</p>
     <button class="btn btn-whats" id="det-whats">${iconeWhats()} Enviar acerto no WhatsApp</button>
+    ${(!soLeitura && abertosDet.length) ? `<button class="btn btn-primario" id="det-fechar" style="background:var(--verde);margin-bottom:12px">🔒 Fechar ciclo agora (${brl(abertosDet.reduce((s,r)=>s+(Number(r.valor_total)||0),0))})</button>` : ""}
     <div class="rotulo">Período de pagamento</div>
     <div class="seg-linha">${segPrazo}</div>
     <div class="rotulo">Litros por dia · cor = ciclo</div>
@@ -2106,6 +2108,7 @@ function abrirDetalheFornecedor(fid){
     <div style="max-height:34vh;overflow-y:auto">${blocos}</div>`);
 
   $("#det-whats").onclick = () => mensagemFornecedor(fid, recs, "");
+  if(!soLeitura && abertosDet.length) $("#det-fechar").onclick = () => fecharCicloFornecedor(fid, abertosDet.map(r=>r.id));
   $$(".seg-prazo").forEach(b => b.onclick = () => {
     const novo = parseInt(b.dataset.prazo);
     if(novo === prazo) return;
