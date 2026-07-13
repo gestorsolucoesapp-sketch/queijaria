@@ -522,7 +522,7 @@ body.leitura .cheque-card .nome, body.leitura .cheque-card .det, body.leitura .c
    ======================================================================= */
 const SUPABASE_URL      = "https://cadnmgaymgljmoadebkk.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uBKKvD_e5ef4326TvkFgcg_rRnjmTus";
-const APP_VER = "v88";
+const APP_VER = "v89";
 const SPLASH_MIN = 2400;
 const EMAIL_ADMIN = "jpferreira1356@icloud.com";
 const splashT0 = Date.now();                              // suba junto com o cache do sw.js
@@ -2685,24 +2685,38 @@ function abrirModalRecebimento(id, fornPre){
       <div class="campo"><label>Data</label><input id="r-data" type="date" value="${r.data||hoje()}"></div>
       <div class="campo"><label>Litros</label><input id="r-litros" type="number" inputmode="decimal" value="${r.litros??""}" placeholder="0"></div>
     </div>
+    <div class="campo">
+      <label>Preço por litro (R$) <span id="r-preco-tag" style="font-weight:400;color:var(--tinta-mole)"></span></label>
+      <input id="r-preco" type="number" inputmode="decimal" step="0.01" value="${r.preco_litro??""}" placeholder="automático">
+    </div>
     <div class="previa" id="r-previa"></div>
     <div class="erro" id="r-erro"></div>
     <button class="btn btn-primario" id="r-salvar">Salvar</button>
     ${botaoExcluir(id?"r-excluir":"","Excluir recebimento")}`);
+  const precoAuto = () => precoLitroPara(parseFloat($("#r-litros").value)||0);
+  const precoUsado = () => {
+    const m = parseFloat($("#r-preco").value);
+    return (!isNaN(m) && m > 0) ? m : precoAuto();
+  };
   const previa = () => {
     const litros = parseFloat($("#r-litros").value)||0;
-    const pl = precoLitroPara(litros);
+    const pAuto = precoAuto();
+    const pl = precoUsado();
+    const manual = Math.abs(pl - pAuto) > 0.0001;
+    $("#r-preco-tag").textContent = manual ? "· ajustado por você" : (pAuto > 0 ? `· automático: ${brl(pAuto)}/L` : "");
+    $("#r-preco").placeholder = pAuto > 0 ? pAuto.toFixed(2) : "0,00";
     const f = state.fornecedores.find(x=>x.id===$("#r-forn").value);
     const venc = addDias($("#r-data").value||hoje(), f?(Number(f.prazo_pagamento)||30):30);
     if(litros > 0 && pl <= 0){
-      $("#r-previa").innerHTML = `<span style="color:var(--vermelho);font-weight:700">⚠️ Sem preço cadastrado pra ${num(litros)} L.</span><br>Ajuste as faixas ou o preço padrão em Cadastro › Leite.`;
+      $("#r-previa").innerHTML = `<span style="color:var(--vermelho);font-weight:700">⚠️ Sem preço pra ${num(litros)} L.</span><br>Digite o preço acima, ou ajuste as faixas em Cadastro › Leite.`;
     } else {
       $("#r-previa").innerHTML = litros>0
-        ? `Preço: <b>${brl(pl)}/L</b> — total <b>${brl(litros*pl)}</b><br>Pagamento: <b>${dataBR(venc)}</b> (${prazoRot(f?f.prazo_pagamento:30)})`
+        ? `Preço: <b>${brl(pl)}/L</b>${manual?` <span style="color:var(--ouro-esc)">(ajustado)</span>`:""} — total <b>${brl(litros*pl)}</b><br>Pagamento: <b>${dataBR(venc)}</b> (${prazoRot(f?f.prazo_pagamento:30)})`
         : "Informe os litros pra calcular o valor.";
     }
   };
   $("#r-litros").oninput = previa;
+  $("#r-preco").oninput = previa;
   $("#r-forn").onchange = previa;
   $("#r-data").onchange = previa;
   previa();
@@ -2715,8 +2729,9 @@ async function salvarRecebimento(id){
   const litros = parseFloat($("#r-litros").value)||0;
   if(!fornecedor_id){ $("#r-erro").textContent = "Escolha o fornecedor."; return; }
   if(litros <= 0){ $("#r-erro").textContent = "Informe os litros."; return; }
-  const preco_litro = precoLitroPara(litros);
-  if(preco_litro <= 0){ $("#r-erro").textContent = `Sem preço pra ${num(litros)} L. Cadastre a faixa ou o preço padrão em Cadastro › Leite.`; return; }
+  const manual = parseFloat($("#r-preco").value);
+  const preco_litro = (!isNaN(manual) && manual > 0) ? manual : precoLitroPara(litros);
+  if(preco_litro <= 0){ $("#r-erro").textContent = `Sem preço pra ${num(litros)} L. Digite o preço por litro, ou cadastre a faixa em Cadastro › Leite.`; return; }
   const dados = { fornecedor_id, data, litros, preco_litro, valor_total: Math.round(litros*preco_litro*100)/100 };
   if(id){
     const r = state.recebimentos.find(x=>x.id===id);
