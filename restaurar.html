@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Restaurar — Queijaria Bene</title>
+<style>
+  :root{ --ouro:#D99A2B; --ouro-esc:#9c6d14; --verde:#4E7C3A; --vermelho:#C0392B;
+         --fundo:#F5F1E8; --card:#FFFDF8; --linha:#E7E0D0; --linha-forte:#D6CCB6; --tinta:#2E2A24; --tinta-mole:#7C7362; }
+  *{box-sizing:border-box}
+  body{margin:0;padding:18px;background:var(--fundo);color:var(--tinta);
+       font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;line-height:1.5}
+  h1{font-size:1.35rem;margin:0 0 4px}
+  .sub{color:var(--tinta-mole);font-size:.9rem;margin-bottom:16px}
+  .card{background:var(--card);border:1px solid var(--linha-forte);border-radius:14px;padding:14px;margin-bottom:12px}
+  .rot{font-size:.72rem;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--tinta-mole);margin-bottom:8px}
+  .l{display:flex;justify-content:space-between;padding:4px 0;font-size:.9rem;border-bottom:1px solid var(--linha)}
+  .l:last-child{border:none}
+  .l b{font-family:"IBM Plex Mono",monospace}
+  .btn{width:100%;border:none;border-radius:12px;padding:14px;font-size:1rem;font-weight:700;
+       font-family:inherit;cursor:pointer;margin-top:8px}
+  .p{background:var(--verde);color:#fff}
+  .s{background:var(--ouro);color:#fff}
+  .f{background:transparent;color:var(--tinta-mole);border:1px solid var(--linha-forte)}
+  .btn:disabled{opacity:.5}
+  input{width:100%;padding:12px;border:1px solid var(--linha-forte);border-radius:10px;font-size:16px;font-family:inherit;margin-top:4px}
+  label{font-size:.8rem;font-weight:700;color:var(--tinta-mole)}
+  #log{white-space:pre-wrap;font-family:"IBM Plex Mono",monospace;font-size:.78rem;
+       background:#2E2A24;color:#E7E0D0;padding:12px;border-radius:10px;margin-top:12px;max-height:40vh;overflow:auto}
+  .aviso{background:#fff6e6;border:1px solid var(--ouro);border-radius:12px;padding:12px;font-size:.86rem;margin-bottom:12px}
+  .erro{color:var(--vermelho);font-weight:700}
+  .ok{color:var(--verde);font-weight:700}
+</style>
+</head>
+<body>
+<h1>🛟 Restaurar Queijaria Bene</h1>
+<div class="sub">Recupera os dados a partir da cópia guardada neste aparelho.</div>
+
+<div class="aviso">
+  <b>Use este aparelho em modo avião até terminar.</b> Esta página lê a cópia local dos dados
+  e reenvia pro banco. Não apaga nada — se um registro já existir, ele é mantido.
+</div>
+
+<div class="card">
+  <div class="rot">Cópia encontrada neste aparelho</div>
+  <div id="resumo">Lendo…</div>
+</div>
+
+<button class="btn s" id="baixar">⬇️ Baixar backup (arquivo JSON)</button>
+
+<div class="card" style="margin-top:12px">
+  <div class="rot">Restaurar para o banco</div>
+  <label>E-mail da conta</label>
+  <input id="email" type="email" autocomplete="username" placeholder="jpferreira1356@icloud.com">
+  <label style="display:block;margin-top:10px">Senha</label>
+  <input id="senha" type="password" autocomplete="current-password" placeholder="••••••••">
+  <button class="btn p" id="restaurar">🛟 Restaurar tudo</button>
+  <button class="btn f" id="voltar">Voltar ao app</button>
+</div>
+
+<div id="log" style="display:none"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+const SUPABASE_URL      = "https://cadnmgaymgljmoadebkk.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_uBKKvD_e5ef4326TvkFgcg_rRnjmTus";
+const ESTADO_KEY = "queijaria_estado";
+
+// nome do campo no state  ->  tabela no banco
+const MAPA = [
+  ["tipos",         "tipos_queijo"],
+  ["fornecedores",  "fornecedores"],
+  ["fornInsumos",   "fornecedores_insumo"],
+  ["insumos",       "insumos"],
+  ["leiteFaixas",   "leite_faixas"],
+  ["receitas",      "receita_insumos"],
+  ["lotes",         "lotes"],
+  ["recebimentos",  "recebimentos_leite"],
+  ["vendas",        "vendas"],
+  ["cheques",       "cheques"],
+  ["descontos",     "descontos"],
+];
+
+const $ = id => document.getElementById(id);
+const log = (m, cls) => {
+  const el = $("log"); el.style.display = "block";
+  el.innerHTML += (cls ? `<span class="${cls}">${m}</span>` : m) + "\n";
+  el.scrollTop = el.scrollHeight;
+};
+
+let estado = null;
+try { estado = JSON.parse(localStorage.getItem(ESTADO_KEY) || "null"); } catch(e){}
+
+function pintarResumo(){
+  if(!estado){
+    $("resumo").innerHTML = '<span class="erro">Nenhuma cópia encontrada neste aparelho.</span><br>'
+      + '<span style="font-size:.85rem;color:var(--tinta-mole)">Tente em outro celular que usava o app — abra esta mesma página nele.</span>';
+    $("baixar").disabled = true; $("restaurar").disabled = true;
+    return;
+  }
+  let html = "";
+  let total = 0;
+  MAPA.forEach(([k, t]) => {
+    const n = Array.isArray(estado[k]) ? estado[k].length : 0;
+    total += n;
+    if(n) html += `<div class="l"><span>${t}</span><b>${n}</b></div>`;
+  });
+  if(!total){
+    $("resumo").innerHTML = '<span class="erro">A cópia deste aparelho está vazia.</span><br>'
+      + '<span style="font-size:.85rem;color:var(--tinta-mole)">Ele provavelmente já sincronizou com o banco vazio. Tente em outro celular (sem abrir o app antes).</span>';
+    $("baixar").disabled = true; $("restaurar").disabled = true;
+    return;
+  }
+  html += `<div class="l" style="margin-top:6px;border-top:2px solid var(--linha-forte)"><span><b>Total de registros</b></span><b>${total}</b></div>`;
+  $("resumo").innerHTML = html;
+}
+pintarResumo();
+
+$("baixar").onclick = () => {
+  const blob = new Blob([JSON.stringify(estado, null, 2)], { type:"application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `backup-queijaria-${new Date().toISOString().slice(0,10)}.json`;
+  a.click();
+  log("✅ Backup baixado. Guarde esse arquivo!", "ok");
+};
+
+$("voltar").onclick = () => location.href = "./index.html";
+
+$("restaurar").onclick = async () => {
+  const email = $("email").value.trim();
+  const senha = $("senha").value;
+  if(!email || !senha){ log("Preencha e-mail e senha.", "erro"); return; }
+  $("restaurar").disabled = true; $("restaurar").textContent = "Restaurando…";
+
+  const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  log("Entrando…");
+  const { data: auth, error: errAuth } = await sb.auth.signInWithPassword({ email, password: senha });
+  if(errAuth){
+    log("❌ Não entrou: " + (errAuth.message || "?"), "erro");
+    $("restaurar").disabled = false; $("restaurar").textContent = "🛟 Restaurar tudo";
+    return;
+  }
+  log("✅ Conectado como " + auth.user.email, "ok");
+
+  let totalOk = 0, totalErr = 0;
+  for(const [k, tabela] of MAPA){
+    const linhas = Array.isArray(estado[k]) ? estado[k] : [];
+    if(!linhas.length) continue;
+    log(`\n${tabela}: enviando ${linhas.length}…`);
+    // em blocos de 100, ignorando duplicados (upsert por id)
+    for(let i = 0; i < linhas.length; i += 100){
+      const bloco = linhas.slice(i, i + 100);
+      const { error } = await sb.from(tabela).upsert(bloco, { onConflict: "id" });
+      if(error){
+        log(`  ❌ ${error.message || "erro"}`, "erro");
+        totalErr += bloco.length;
+      } else {
+        totalOk += bloco.length;
+        log(`  ✅ ${Math.min(i + 100, linhas.length)}/${linhas.length}`, "ok");
+      }
+    }
+  }
+  // config (é um objeto único, não lista)
+  if(estado.config && estado.config.familia_id){
+    const { error } = await sb.from("queijaria_config").upsert(estado.config, { onConflict: "familia_id" });
+    log(error ? `queijaria_config: ❌ ${error.message}` : "queijaria_config: ✅", error ? "erro" : "ok");
+  }
+
+  log(`\n━━━━━━━━━━━━━━━━━━━━`);
+  log(`RESTAURADOS: ${totalOk}`, "ok");
+  if(totalErr) log(`FALHARAM: ${totalErr}`, "erro");
+  log(`\nAbra o app e confira. Se estiver tudo certo, apague esta página.`);
+  $("restaurar").textContent = "Concluído";
+};
+</script>
+</body>
+</html>
