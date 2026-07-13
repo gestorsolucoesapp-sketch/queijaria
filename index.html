@@ -545,7 +545,7 @@ body.leitura.libera-baixa #btn-config{ display:inline-flex !important }
    ======================================================================= */
 const SUPABASE_URL      = "https://cadnmgaymgljmoadebkk.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uBKKvD_e5ef4326TvkFgcg_rRnjmTus";
-const APP_VER = "v102";
+const APP_VER = "v103";
 const SPLASH_MIN = 2400;
 const EMAIL_ADMIN = "jpferreira1356@icloud.com";
 const splashT0 = Date.now();                              // suba junto com o cache do sw.js
@@ -3039,7 +3039,7 @@ function abrirModalRecebimento(id, fornPre){
     <h2>${id?"Editar":"Novo"} recebimento</h2>
     <div class="campo"><label>Fornecedor</label><select id="r-forn">${opts}</select></div>
     <div class="linha-campos">
-      <div class="campo"><label>Data</label><input id="r-data" type="date" value="${r.data||hoje()}"></div>
+      <div class="campo"><label>Data</label><input id="r-data" type="date" value="${r.data||""}"></div>
       <div class="campo"><label>Litros</label><input id="r-litros" type="number" inputmode="decimal" value="${r.litros??""}" placeholder="0"></div>
     </div>
     <div class="campo">
@@ -3063,9 +3063,12 @@ function abrirModalRecebimento(id, fornPre){
     $("#r-preco-tag").textContent = manual ? "· ajustado por você" : (pAuto > 0 ? `· automático: ${brl(pAuto)}/L` : "");
     $("#r-preco").placeholder = pAuto > 0 ? pAuto.toFixed(2) : "0,00";
     const f = state.fornecedores.find(x=>x.id===$("#r-forn").value);
-    const venc = addDias($("#r-data").value||hoje(), f?(Number(f.prazo_pagamento)||30):30);
+    const dt = $("#r-data").value;
+    const venc = dt ? addDias(dt, f?(Number(f.prazo_pagamento)||30):30) : null;
     if(litros > 0 && pl <= 0){
       $("#r-previa").innerHTML = `<span style="color:var(--vermelho);font-weight:700">⚠️ Sem preço pra ${num(litros)} L.</span><br>Digite o preço acima, ou ajuste as faixas em Cadastro › Leite.`;
+    } else if(!dt){
+      $("#r-previa").innerHTML = "Escolha a <b>data da entrega</b>.";
     } else {
       $("#r-previa").innerHTML = litros>0
         ? `Preço: <b>${brl(pl)}/L</b>${manual?` <span style="color:var(--ouro-esc)">(ajustado)</span>`:""} — total <b>${brl(litros*pl)}</b><br>Pagamento: <b>${dataBR(venc)}</b> (${prazoRot(f?f.prazo_pagamento:30)})`
@@ -3082,9 +3085,10 @@ function abrirModalRecebimento(id, fornPre){
 }
 async function salvarRecebimento(id){
   const fornecedor_id = $("#r-forn").value;
-  const data = $("#r-data").value || hoje();
+  const data = $("#r-data").value;
   const litros = parseFloat($("#r-litros").value)||0;
   if(!fornecedor_id){ $("#r-erro").textContent = "Escolha o fornecedor."; return; }
+  if(!data){ $("#r-erro").textContent = "Escolha a data da entrega."; return; }
   if(litros <= 0){ $("#r-erro").textContent = "Informe os litros."; return; }
   const manual = parseFloat($("#r-preco").value);
   const preco_litro = (!isNaN(manual) && manual > 0) ? manual : precoLitroPara(litros);
