@@ -551,7 +551,7 @@ body.leitura.libera-baixa #btn-config{ display:inline-flex !important }
    ======================================================================= */
 const SUPABASE_URL      = "https://cadnmgaymgljmoadebkk.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uBKKvD_e5ef4326TvkFgcg_rRnjmTus";
-const APP_VER = "v109";
+const APP_VER = "v110";
 const SPLASH_MIN = 2400;
 const EMAIL_ADMIN = "jpferreira1356@icloud.com";
 const splashT0 = Date.now();                              // suba junto com o cache do sw.js
@@ -1480,7 +1480,10 @@ function agendarSync(){
     else if(p === "cadastro") renderCadastro();
   }, 700);
 }
-$$(".nav a").forEach(a => a.onclick = () => irPara(a.dataset.nav));
+$$(".nav a").forEach(a => a.onclick = () => {
+  if(a.dataset.nav === "leite") leiteAba = "apagar";   // Leite sempre abre em "A pagar"
+  irPara(a.dataset.nav);
+});
 function irPara(nome){
   $$(".nav a").forEach(a => a.classList.toggle("ativo", a.dataset.nav === nome));
   ["inicio","producao","leite","vendas","cheques","cadastro"].forEach(v => $("#view-"+v).classList.add("hidden"));
