@@ -339,6 +339,7 @@ body.leitura.libera-baixa #btn-config{ display:inline-flex !important }
 .calc-op{flex:none;width:44px;border:1px solid var(--linha-forte);background:var(--card);color:var(--ouro-esc);
   border-radius:10px;font-size:1.25rem;font-weight:800;font-family:inherit;cursor:pointer;line-height:1}
 .calc-op:active{background:var(--ouro);color:#fff;border-color:var(--ouro)}
+.calc-eq{background:var(--ouro);color:#fff;border-color:var(--ouro)}
 .pg-sug-lbl{font-size:.76rem;color:var(--tinta-mole);margin-top:7px}
 .pg-per{display:flex;align-items:center;gap:6px;font-size:.78rem;color:var(--ouro-esc);font-weight:700;margin-bottom:8px}
 .pg-per input{width:52px;border:1px solid var(--ouro);border-radius:8px;padding:5px 6px;font-family:'IBM Plex Mono',monospace;font-size:.82rem;text-align:center;background:var(--card);color:var(--tinta)}
@@ -550,7 +551,7 @@ body.leitura.libera-baixa #btn-config{ display:inline-flex !important }
    ======================================================================= */
 const SUPABASE_URL      = "https://cadnmgaymgljmoadebkk.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uBKKvD_e5ef4326TvkFgcg_rRnjmTus";
-const APP_VER = "v108";
+const APP_VER = "v109";
 const SPLASH_MIN = 2400;
 const EMAIL_ADMIN = "jpferreira1356@icloud.com";
 const splashT0 = Date.now();                              // suba junto com o cache do sw.js
@@ -3059,14 +3060,13 @@ function abrirModalRecebimento(id, fornPre){
   abrirFolha(`
     <h2>${id?"Editar":"Novo"} recebimento</h2>
     <div class="campo"><label>Fornecedor</label><select id="r-forn">${opts}</select></div>
-    <div class="linha-campos">
-      <div class="campo"><label>Data</label><input id="r-data" type="date" value="${r.data||""}"></div>
-      <div class="campo"><label>Litros <span id="r-litros-tag" style="font-weight:400;color:var(--tinta-mole)"></span></label>
-        <div class="calc-linha">
-          <input id="r-litros" type="text" inputmode="decimal" autocomplete="off" value="${r.litros??""}" placeholder="0">
-          <button type="button" class="calc-op" data-op="+">+</button>
-          <button type="button" class="calc-op" data-op="-">−</button>
-        </div>
+    <div class="campo"><label>Data</label><input id="r-data" type="date" value="${r.data||""}"></div>
+    <div class="campo"><label>Litros <span id="r-litros-tag" style="font-weight:400;color:var(--tinta-mole)"></span></label>
+      <div class="calc-linha">
+        <input id="r-litros" type="text" inputmode="decimal" autocomplete="off" value="${r.litros??""}" placeholder="0">
+        <button type="button" class="calc-op" data-op="+">+</button>
+        <button type="button" class="calc-op" data-op="-">−</button>
+        <button type="button" class="calc-op calc-eq" id="r-eq">=</button>
       </div>
     </div>
     <div class="campo">
@@ -3106,7 +3106,7 @@ function abrirModalRecebimento(id, fornPre){
     }
   };
   $("#r-litros").oninput = previa;
-  $$(".calc-op").forEach(b => b.onclick = () => {
+  $$(".calc-op[data-op]").forEach(b => b.onclick = () => {
     const inp = $("#r-litros");
     const v = inp.value.trim();
     if(!v || /[+\-*/]$/.test(v)) return;   // não põe operador em campo vazio nem dois seguidos
@@ -3114,6 +3114,13 @@ function abrirModalRecebimento(id, fornPre){
     inp.focus();
     previa();
   });
+  $("#r-eq").onclick = () => {
+    const inp = $("#r-litros");
+    const v = calcExpr(inp.value);
+    if(!isNaN(v) && v > 0){ inp.value = String(Math.round(v*100)/100).replace(".", ","); }
+    inp.focus();
+    previa();
+  };
   $("#r-preco").oninput = previa;
   $("#r-forn").onchange = previa;
   $("#r-data").onchange = previa;
