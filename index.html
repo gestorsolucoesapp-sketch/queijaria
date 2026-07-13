@@ -545,7 +545,7 @@ body.leitura.libera-baixa #btn-config{ display:inline-flex !important }
    ======================================================================= */
 const SUPABASE_URL      = "https://cadnmgaymgljmoadebkk.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uBKKvD_e5ef4326TvkFgcg_rRnjmTus";
-const APP_VER = "v104";
+const APP_VER = "v105";
 const SPLASH_MIN = 2400;
 const EMAIL_ADMIN = "jpferreira1356@icloud.com";
 const splashT0 = Date.now();                              // suba junto com o cache do sw.js
@@ -2343,7 +2343,8 @@ function renderLeiteAPagar(corpo){
     grupos[k].litros += Number(r.litros)||0;
     grupos[k].valor  += Number(r.valor_total)||0;
     if(venc < grupos[k].vencMin) grupos[k].vencMin = venc; // vencimento mais próximo
-    if(String(r.data||"") > grupos[k].ult) grupos[k].ult = String(r.data||""); // última entrega lançada
+    const quando = String(r.criado_em || r.data || "");     // quando foi REGISTRADO
+    if(quando > grupos[k].ult) grupos[k].ult = quando;      // último lançamento feito
   });
   Object.values(grupos).forEach(g => { g.venc = g.vencMin; });
 
@@ -2363,12 +2364,9 @@ function renderLeiteAPagar(corpo){
 
   html += `<div class="rotulo">A pagar</div>`;
 
-  // ordenar: ciclo fechado (vencido) primeiro; depois pelo lançamento mais recente
+  // ordenar: o último que teve lançamento fica em cima
   const chaves = Object.keys(grupos).sort((a,b)=>{
-    const fa = grupos[a].itens.some(estaFechado) ? 0 : 1;
-    const fb = grupos[b].itens.some(estaFechado) ? 0 : 1;
-    if(fa !== fb) return fa - fb;
-    const u = String(grupos[b].ult||"").localeCompare(String(grupos[a].ult||""));  // mais recente em cima
+    const u = String(grupos[b].ult||"").localeCompare(String(grupos[a].ult||""));
     if(u !== 0) return u;
     return grupos[a].venc.localeCompare(grupos[b].venc);
   });
