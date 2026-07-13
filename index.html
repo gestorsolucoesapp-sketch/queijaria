@@ -314,6 +314,12 @@ body.leitura .cheque-card .nome, body.leitura .cheque-card .det, body.leitura .c
 .alerta-cheque .ac-sub{font-size:.8rem;color:var(--tinta-mole);margin-top:1px}
 .btn-whats{background:#25D366;color:#fff;border:none;display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:12px}
 .cheque-card{display:flex;align-items:center;gap:12px}
+.pg-sug{background:#fff6e6;border:1px solid var(--ouro);border-radius:12px;padding:10px 12px;margin-top:4px}
+.pg-sug-tit{font-size:.82rem;color:var(--ouro-esc);line-height:1.4;margin-bottom:8px}
+.pg-chips{display:flex;gap:6px;overflow-x:auto;padding-bottom:2px}
+.pg-chip{flex:none;border:1px solid var(--linha-forte);background:var(--card);color:var(--tinta);border-radius:20px;padding:7px 11px;font-size:.76rem;font-family:inherit;font-weight:700;cursor:pointer;white-space:nowrap}
+.pg-chip.on{background:var(--ouro);color:#fff;border-color:var(--ouro)}
+.pg-sug-lbl{font-size:.76rem;color:var(--tinta-mole);margin-top:7px}
 .chq-busca{position:relative;margin-bottom:14px}
 .chq-busca svg{position:absolute;left:13px;top:50%;transform:translateY(-50%);color:var(--tinta-mole);pointer-events:none}
 .chq-busca input{width:100%;padding:12px 40px;border:1px solid var(--linha-forte);border-radius:12px;font-size:16px;font-family:inherit;background:var(--card);color:var(--tinta)}
@@ -522,7 +528,7 @@ body.leitura .cheque-card .nome, body.leitura .cheque-card .det, body.leitura .c
    ======================================================================= */
 const SUPABASE_URL      = "https://cadnmgaymgljmoadebkk.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uBKKvD_e5ef4326TvkFgcg_rRnjmTus";
-const APP_VER = "v89";
+const APP_VER = "v90";
 const SPLASH_MIN = 2400;
 const EMAIL_ADMIN = "jpferreira1356@icloud.com";
 const splashT0 = Date.now();                              // suba junto com o cache do sw.js
@@ -2376,39 +2382,69 @@ function pagarComEscolha(ids){
   const desc = state.descontos.filter(d=>fids.includes(d.fornecedor_id)&&!d.usado).reduce((s,d)=>s+(Number(d.valor)||0),0);
   const liquido = Math.max(0, bruto-desc);
   const nome = fids.length===1 ? nomeForn(fids[0]) : "vários fornecedores";
+  const sug = sugerirDiaCheque();
   abrirFolha(`
     <h2>Pagar ${esc(nome)}</h2>
     <p class="dica" style="margin-top:-6px">${brl(bruto)}${desc>0?` − desconto ${brl(desc)}`:""} = <b>${brl(liquido)}</b></p>
     <div class="rotulo">Como pagou?</div>
     <div class="seg-linha" style="margin-bottom:12px">
-      <button class="seg-pag ativo" data-forma="dinheiro">💵 Dinheiro / Pix</button>
-      <button class="seg-pag" data-forma="cheque">📝 Cheque</button>
+      <button class="seg-pag" data-forma="dinheiro">💵 Dinheiro / Pix</button>
+      <button class="seg-pag ativo" data-forma="cheque">📝 Cheque</button>
     </div>
-    <div id="pg-cheque" style="display:none">
+    <div id="pg-cheque">
       <div class="linha-campos">
         <div class="campo"><label>Nº do cheque</label><input id="pg-num" inputmode="numeric" placeholder="opcional"></div>
-        <div class="campo"><label>Prazo (dias)</label><input id="pg-prazo" type="number" inputmode="numeric" value="30"></div>
+        <div class="campo"><label>Data de cair</label><input id="pg-venc" type="date" value="${sug.data}"></div>
       </div>
-      <div class="campo"><label>Data do cheque</label><input id="pg-data" type="date" value="${hoje()}"></div>
-      <p class="dica" style="margin-top:-4px">O cheque de <b>${brl(liquido)}</b> vai cair no controle de cheques.</p>
+      <div id="pg-sug" class="pg-sug"></div>
+      <p class="dica" style="margin-top:6px">O cheque de <b>${brl(liquido)}</b> vai cair no controle de cheques.</p>
     </div>
     <div class="erro" id="pg-erro"></div>
     <button class="btn btn-primario" id="pg-ok" style="background:var(--verde)">Confirmar pagamento</button>`);
-  let forma = "dinheiro";
+  let forma = "cheque";
   $$(".seg-pag").forEach(b => b.onclick = () => {
     forma = b.dataset.forma;
     $$(".seg-pag").forEach(x => x.classList.toggle("ativo", x===b));
     $("#pg-cheque").style.display = forma==="cheque" ? "" : "none";
   });
+  const pintarSug = () => {
+    const d = $("#pg-venc").value || sug.data;
+    const carga = cargaDoDia(d);
+    const dias = diffDias(d);
+    const opts = sug.opcoes.map(o =>
+      `<button type="button" class="pg-chip ${o.data===d?"on":""}" data-sug="${o.data}">${dataBR(o.data).slice(0,5)} · ${o.carga>0?brl(o.carga):"livre"}</button>`).join("");
+    $("#pg-sug").innerHTML = `
+      <div class="pg-sug-tit">${sug.melhor ? `💡 Dia mais tranquilo: <b>${dataBR(sug.melhor.data)}</b> (${sug.melhor.carga>0?`só ${brl(sug.melhor.carga)} nesse dia`:"nenhum cheque nesse dia"})` : ""}</div>
+      <div class="pg-chips">${opts}</div>
+      <div class="pg-sug-lbl">Escolhido: <b>${dataBR(d)}</b> · ${dias} dias · ${carga>0?`já tem ${brl(carga)} caindo`:"nenhum cheque nesse dia"}</div>`;
+    $$("[data-sug]").forEach(b => b.onclick = () => { $("#pg-venc").value = b.dataset.sug; pintarSug(); });
+  };
+  $("#pg-venc").onchange = pintarSug;
+  pintarSug();
   $("#pg-ok").onclick = () => {
     let cheque = null;
     if(forma === "cheque"){
       cheque = { para:nome, valor:liquido, numero:($("#pg-num").value.trim()||null),
-                 prazo_dias:Math.max(0, parseInt($("#pg-prazo").value)||0), data:$("#pg-data").value||hoje() };
+                 prazo_dias:0, data:($("#pg-venc").value||sug.data) };
     }
     fecharModal();
     marcarPagoGrupo(ids, cheque);
   };
+}
+// quanto (em R$) já cai num determinado dia, em cheques ainda não compensados
+function cargaDoDia(d){
+  return state.cheques.filter(c => !c.compensado && bomParaDe(c) === d)
+                      .reduce((s,c)=> s+(Number(c.valor)||0), 0);
+}
+// sugere o dia mais tranquilo entre 25 e 30 dias a partir de hoje
+function sugerirDiaCheque(){
+  const opcoes = [];
+  for(let n=25; n<=30; n++){
+    const data = addDias(hoje(), n);
+    opcoes.push({ data, dias:n, carga: cargaDoDia(data) });
+  }
+  const melhor = [...opcoes].sort((a,b)=> a.carga - b.carga || a.dias - b.dias)[0];
+  return { opcoes, melhor, data: melhor ? melhor.data : addDias(hoje(), 30) };
 }
 
 async function marcarPagoGrupo(ids, cheque){
