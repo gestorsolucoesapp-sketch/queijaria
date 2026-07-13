@@ -1,6 +1,6 @@
 /* Queijaria — service worker.
    IMPORTANTE: ao dar deploy, suba o número aqui JUNTO com o APP_VER do index.html. */
-const CACHE = "queijaria-shell-v103";
+const CACHE = "queijaria-shell-v104";
 const SHELL = ["./", "./index.html", "./manifest.json", "./icon.svg", "./logo.png"];
 // arquivos que devem SEMPRE buscar a versão nova ao abrir (rede primeiro)
 const SEMPRE_NOVO = ["/index.html", "/sw.js", "/"];
