@@ -542,7 +542,7 @@ body.leitura.libera-baixa #btn-config{ display:inline-flex !important }
    ======================================================================= */
 const SUPABASE_URL      = "https://cadnmgaymgljmoadebkk.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uBKKvD_e5ef4326TvkFgcg_rRnjmTus";
-const APP_VER = "v100";
+const APP_VER = "v101";
 const SPLASH_MIN = 2400;
 const EMAIL_ADMIN = "jpferreira1356@icloud.com";
 const splashT0 = Date.now();                              // suba junto com o cache do sw.js
@@ -2232,9 +2232,9 @@ function abrirDetalheFornecedor(fid){
     const linhas = Object.keys(cd.dias).sort().reverse().map(d => {
       const x = cd.dias[d];
       const st = x.pagos === x.qtd ? `<span class="pill-venc pago">pago</span>` : "";
-      return `<div class="tipo" style="padding:9px 12px;border-left:4px solid ${cor}">
+      return `<div class="tipo" data-fdia="${d}" style="padding:9px 12px;border-left:4px solid ${cor};cursor:pointer">
         <div><div class="nome" style="font-size:.85rem">${dataBR(d)} ${st}</div>
-        <div class="det">${num(x.litros)} L${x.qtd>1?` · ${x.qtd} entregas`:""}</div></div>
+        <div class="det">${num(x.litros)} L${x.qtd>1?` · ${x.qtd} entregas`:""} · toque pra editar</div></div>
         <div class="preco">${brl(x.valor)}</div>
       </div>`;
     }).join("");
@@ -2264,6 +2264,22 @@ function abrirDetalheFornecedor(fid){
     <div style="max-height:34vh;overflow-y:auto">${blocos}</div>`);
 
   $("#det-whats").onclick = () => mensagemFornecedor(fid, recs, "");
+  $$("[data-fdia]").forEach(el => el.onclick = () => {
+    const d = el.dataset.fdia;
+    const doDia = state.recebimentos.filter(r => r.fornecedor_id === fid && r.data === d);
+    if(!doDia.length) return;
+    if(doDia.length === 1){ fecharModal(); abrirModalRecebimento(doDia[0].id); return; }
+    // vários no mesmo dia: escolher qual editar
+    abrirFolha(`
+      <h2>${dataBR(d)} — ${esc(f.nome)}</h2>
+      <p class="dica" style="margin-top:-6px">${doDia.length} lançamentos nesse dia. Toque no que quer editar.</p>
+      ${doDia.map(r=>`<div class="tipo" data-red="${r.id}" style="cursor:pointer">
+        <div><div class="nome">${num(r.litros)} L</div><div class="det">${brl(r.preco_litro)}/L</div></div>
+        <div class="preco">${brl(r.valor_total)}</div></div>`).join("")}
+      <button class="btn btn-fantasma" id="fd-voltar" style="margin-top:8px">Voltar</button>`);
+    $("#fd-voltar").onclick = () => abrirDetalheFornecedor(fid);
+    $$("[data-red]").forEach(b => b.onclick = () => { fecharModal(); abrirModalRecebimento(b.dataset.red); });
+  });
   if(!soLeitura && abertosDet.length) $("#det-fechar").onclick = () => fecharCicloFornecedor(fid, abertosDet.map(r=>r.id));
   $$(".seg-prazo").forEach(b => b.onclick = () => {
     const novo = parseInt(b.dataset.prazo);
