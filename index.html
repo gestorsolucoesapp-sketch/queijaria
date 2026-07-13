@@ -545,7 +545,7 @@ body.leitura.libera-baixa #btn-config{ display:inline-flex !important }
    ======================================================================= */
 const SUPABASE_URL      = "https://cadnmgaymgljmoadebkk.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uBKKvD_e5ef4326TvkFgcg_rRnjmTus";
-const APP_VER = "v103";
+const APP_VER = "v104";
 const SPLASH_MIN = 2400;
 const EMAIL_ADMIN = "jpferreira1356@icloud.com";
 const splashT0 = Date.now();                              // suba junto com o cache do sw.js
@@ -2338,11 +2338,12 @@ function renderLeiteAPagar(corpo){
   recs.forEach(r => {
     const venc = vencimentoDe(r);
     const k = r.fornecedor_id;
-    if(!grupos[k]) grupos[k] = { fid:r.fornecedor_id, venc, vencMin:venc, itens:[], litros:0, valor:0 };
+    if(!grupos[k]) grupos[k] = { fid:r.fornecedor_id, venc, vencMin:venc, ult:"", itens:[], litros:0, valor:0 };
     grupos[k].itens.push(r);
     grupos[k].litros += Number(r.litros)||0;
     grupos[k].valor  += Number(r.valor_total)||0;
     if(venc < grupos[k].vencMin) grupos[k].vencMin = venc; // vencimento mais próximo
+    if(String(r.data||"") > grupos[k].ult) grupos[k].ult = String(r.data||""); // última entrega lançada
   });
   Object.values(grupos).forEach(g => { g.venc = g.vencMin; });
 
@@ -2362,11 +2363,13 @@ function renderLeiteAPagar(corpo){
 
   html += `<div class="rotulo">A pagar</div>`;
 
-  // ordenar: quem tem ciclo fechado (vencido) primeiro
+  // ordenar: ciclo fechado (vencido) primeiro; depois pelo lançamento mais recente
   const chaves = Object.keys(grupos).sort((a,b)=>{
     const fa = grupos[a].itens.some(estaFechado) ? 0 : 1;
     const fb = grupos[b].itens.some(estaFechado) ? 0 : 1;
     if(fa !== fb) return fa - fb;
+    const u = String(grupos[b].ult||"").localeCompare(String(grupos[a].ult||""));  // mais recente em cima
+    if(u !== 0) return u;
     return grupos[a].venc.localeCompare(grupos[b].venc);
   });
   if(!chaves.length){
