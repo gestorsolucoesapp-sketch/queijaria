@@ -551,7 +551,7 @@ body.leitura.libera-baixa #btn-config{ display:inline-flex !important }
    ======================================================================= */
 const SUPABASE_URL      = "https://cadnmgaymgljmoadebkk.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uBKKvD_e5ef4326TvkFgcg_rRnjmTus";
-const APP_VER = "v110";
+const APP_VER = "v111";
 const SPLASH_MIN = 2400;
 const EMAIL_ADMIN = "jpferreira1356@icloud.com";
 const splashT0 = Date.now();                              // suba junto com o cache do sw.js
@@ -1841,6 +1841,7 @@ function abrirModalConfig(){
     ${ehAdmin() ? `<button class="btn btn-primario" id="cfg-admin" style="margin-bottom:14px">📊 Painel do administrador</button>` : ""}
     ${secaoAbas}
     ${secaoAparelho}
+    <button class="btn btn-primario" id="cfg-fechar-ciclos" style="background:var(--verde);margin-bottom:6px">🔒 Fechar ciclos vencidos agora</button>
     <button class="btn btn-primario" id="cfg-backup" style="background:var(--ouro);margin-bottom:14px">🛟 Backup e resgate de dados</button>
     <div class="rotulo" style="margin-top:4px">Zona de perigo</div>
     <p class="dica">Apaga <b>todos os dados</b> da queijaria: fornecedores, queijos, insumos, recebimentos, lotes, faixas de preço e configurações. A conta e a família continuam. <b>Não tem volta.</b></p>
@@ -1849,6 +1850,7 @@ function abrirModalConfig(){
     <button class="btn btn-primario" id="cfg-zerar" style="background:var(--vermelho)">Começar do zero</button>`);
   $("#cfg-zerar").onclick = comecarDoZero;
   $("#cfg-backup").onclick = abrirResgate;
+  $("#cfg-fechar-ciclos").onclick = fecharCiclosVencidosForcado;
   $("#cfg-baixa").onchange = (e) => {
     setPodeBaixa(e.target.checked);
     toast(e.target.checked ? "Este aparelho já pode dar baixa em cheque. ✅" : "Baixa de cheque bloqueada neste aparelho.");
@@ -2345,6 +2347,36 @@ function autoFecharCiclos(){
   paraFechar.forEach(r => r.ciclo_fechado = true);
   const ids = paraFechar.map(r=>r.id);
   dbw("recebimentos_leite").update({ ciclo_fechado:true }).in("id", ids).then(()=>{}, ()=>{});
+}
+// fechamento FORÇADO: fecha tudo que já venceu, inclusive os reabertos (ciclo_fechado=false)
+function fecharCiclosVencidosForcado(){
+  if(bloqueiaLeitura()) return;
+  const hj = hoje();
+  const alvo = state.recebimentos.filter(r => !r.pago && r.ciclo_fechado !== true && vencimentoDe(r) <= hj);
+  if(!alvo.length){ toast("Nenhum ciclo vencido pra fechar. ✅"); return; }
+  const porForn = {};
+  alvo.forEach(r => {
+    const n = nomeForn(r.fornecedor_id);
+    if(!porForn[n]) porForn[n] = { qtd:0, valor:0 };
+    porForn[n].qtd++; porForn[n].valor += Number(r.valor_total)||0;
+  });
+  const linhas = Object.keys(porForn).sort().map(n =>
+    `<div class="pg-forn-l"><span>${esc(n)} · ${porForn[n].qtd} lanç.</span><span class="cf-val">${brl(porForn[n].valor)}</span></div>`).join("");
+  const total = alvo.reduce((s,r)=> s+(Number(r.valor_total)||0),0);
+  confirmarAcao(
+    `Fechar <b>${alvo.length} lançamentos vencidos</b> (${brl(total)})?<br>Eles vão pra "a pagar" como ciclo fechado.<div style="margin-top:8px">${linhas}</div>`,
+    async () => {
+      const bak = alvo.map(r => ({ id:r.id, cf:r.ciclo_fechado }));
+      alvo.forEach(r => r.ciclo_fechado = true);
+      renderRecebimento(); toast(`${alvo.length} lançamentos fechados. 🔒`);
+      const { error } = await dbw("recebimentos_leite").update({ ciclo_fechado:true }).in("id", alvo.map(r=>r.id));
+      if(error){
+        bak.forEach(b => { const r = state.recebimentos.find(x=>x.id===b.id); if(r) r.ciclo_fechado = b.cf; });
+        renderRecebimento(); toast("Erro ao fechar: "+(error.message||"?"), true);
+      }
+    },
+    { titulo:"Fechar ciclos vencidos", ok:"Fechar tudo", corOk:"var(--verde)", corTexto:"#fff" }
+  );
 }
 
 function renderLeiteAPagar(corpo){
