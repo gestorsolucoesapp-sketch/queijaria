@@ -545,7 +545,7 @@ body.leitura.libera-baixa #btn-config{ display:inline-flex !important }
    ======================================================================= */
 const SUPABASE_URL      = "https://cadnmgaymgljmoadebkk.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uBKKvD_e5ef4326TvkFgcg_rRnjmTus";
-const APP_VER = "v105";
+const APP_VER = "v106";
 const SPLASH_MIN = 2400;
 const EMAIL_ADMIN = "jpferreira1356@icloud.com";
 const splashT0 = Date.now();                              // suba junto com o cache do sw.js
@@ -2383,13 +2383,16 @@ function renderLeiteAPagar(corpo){
       const lA = abertos.reduce((s,r)=>s+(Number(r.litros)||0),0);
       const vencF = fechados.length ? fechados.map(vencimentoDe).sort().slice(-1)[0] : null;
       const vencA = abertos.length  ? abertos.map(vencimentoDe).sort()[0] : null;
+      const ultDiaF = fechados.length ? fechados.map(r=>r.data).sort().slice(-1)[0] : null;
+      const ultDiaA = abertos.length  ? abertos.map(r=>r.data).sort().slice(-1)[0] : null;
+      const ultTag = (d) => d ? `<br><span style="color:var(--tinta-mole)">última entrega: <b>${dataBR(d)}</b></span>` : "";
 
       if(fechados.length){
         const desc = descPend(g.fid);
         return `<div class="tipo vencido" data-grupo="${k}">
           <div>
             <div class="nome"><span class="link-forn" data-fdet="${g.fid}">${esc(nomeForn(g.fid))}</span> <span class="pill-venc on">CICLO FECHADO</span></div>
-            <div class="det">${fechados.length} lançamentos · ${num(lF)} L · venceu ${dataBR(vencF)}${desc>0?`<br><span style="color:var(--azul)">− desconto ${brl(desc)} → líquido ${brl(vF-desc)}</span>`:""}${abertos.length?`<br><span style="color:var(--verde)">● ciclo novo: ${brl(vA)} · ${abertos.length} lanç. (próx. ${dataBR(vencA)})</span>`:""}</div>
+            <div class="det">${fechados.length} lançamentos · ${num(lF)} L · venceu ${dataBR(vencF)}${ultTag(ultDiaF)}${desc>0?`<br><span style="color:var(--azul)">− desconto ${brl(desc)} → líquido ${brl(vF-desc)}</span>`:""}${abertos.length?`<br><span style="color:var(--verde)">● ciclo novo: ${brl(vA)} · ${abertos.length} lanç. (próx. ${dataBR(vencA)})${ultDiaA?` · última ${dataBR(ultDiaA)}`:""}</span>`:""}</div>
           </div>
           <div style="text-align:right">
             <div class="preco">${brl(vF-desc)}</div>
@@ -2402,7 +2405,7 @@ function renderLeiteAPagar(corpo){
       return `<div class="tipo" data-grupo="${k}">
         <div>
           <div class="nome"><span class="link-forn" data-fdet="${g.fid}">${esc(nomeForn(g.fid))}</span> <span class="pill-venc" data-prazoforn="${g.fid}">próx. ${dataBR(vencA)}</span></div>
-          <div class="det">${abertos.length} lançamento${abertos.length>1?"s":""} · ${num(lA)} L${desc>0?`<br><span style="color:var(--azul)">− desconto ${brl(desc)} → líquido ${brl(vA-desc)}</span>`:""}</div>
+          <div class="det">${abertos.length} lançamento${abertos.length>1?"s":""} · ${num(lA)} L${ultTag(ultDiaA)}${desc>0?`<br><span style="color:var(--azul)">− desconto ${brl(desc)} → líquido ${brl(vA-desc)}</span>`:""}</div>
         </div>
         <div style="text-align:right">
           <div class="preco">${brl(vA-desc)}</div>
