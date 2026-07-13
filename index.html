@@ -542,7 +542,7 @@ body.leitura.libera-baixa #btn-config{ display:inline-flex !important }
    ======================================================================= */
 const SUPABASE_URL      = "https://cadnmgaymgljmoadebkk.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uBKKvD_e5ef4326TvkFgcg_rRnjmTus";
-const APP_VER = "v99";
+const APP_VER = "v100";
 const SPLASH_MIN = 2400;
 const EMAIL_ADMIN = "jpferreira1356@icloud.com";
 const splashT0 = Date.now();                              // suba junto com o cache do sw.js
@@ -1332,22 +1332,33 @@ async function carregarTudo(){
   ]);
   let cfg = {};
   try { const r = await sb.from("queijaria_config").select("*").eq("familia_id", familiaId).maybeSingle(); cfg = r.data || {}; } catch(e){}
-  // 🛟 PROTEÇÃO: se o banco veio VAZIO mas este aparelho tem cópia local, NÃO sobrescreve.
-  const vazioNoBanco = !t.length && !l.length && !f.length && !rec.length && !vds.length && !chq.length;
-  if(vazioNoBanco){
-    let copia = null;
-    try { copia = JSON.parse(localStorage.getItem(ESTADO_KEY) || "null"); } catch(e){}
-    const temCopia = copia && ((copia.fornecedores||[]).length || (copia.recebimentos||[]).length || (copia.cheques||[]).length);
-    if(temCopia){
-      Object.assign(state, copia);
-      precisaRestaurar = true;      // avisa e oferece restauração
-      return;                        // não salva cache vazio por cima
+  // 🛟 PROTEÇÃO: comparar a cópia local com o banco ANTES de sobrescrever.
+  const doBanco = { tipos:t, lotes:l, fornecedores:f, leiteFaixas:lf, insumos:ins, fornInsumos:finsu,
+                    receitas, recebimentos:rec, vendas:vds, cheques:chq, descontos:dsc };
+  let copia = null;
+  try { copia = JSON.parse(localStorage.getItem(ESTADO_KEY) || "null"); } catch(e){}
+  if(copia){
+    const faltando = {};
+    let nFalta = 0;
+    MAPA_BK.forEach(([k]) => {
+      const locais = Array.isArray(copia[k]) ? copia[k] : [];
+      if(!locais.length) return;
+      const idsBanco = new Set((doBanco[k]||[]).map(x => x.id));
+      const ausentes = locais.filter(x => x && x.id && !idsBanco.has(x.id));
+      if(ausentes.length){ faltando[k] = ausentes; nFalta += ausentes.length; }
+    });
+    if(nFalta){
+      // guarda o que este aparelho tem e o banco não — NUNCA é perdido
+      try { localStorage.setItem(RESGATE_KEY, JSON.stringify(faltando)); } catch(e){}
+      resgatePendente = nFalta;
+      precisaRestaurar = true;
     }
   }
   state.tipos = t; state.lotes = l; state.fornecedores = f; state.leiteFaixas = lf; state.insumos = ins; state.fornInsumos = finsu; state.receitas = receitas; state.config = cfg; state.recebimentos = rec; state.vendas = vds; state.cheques = chq; state.descontos = dsc;
   salvarCacheEstado();
 }
-let precisaRestaurar = false;
+let precisaRestaurar = false, resgatePendente = 0;
+const RESGATE_KEY = "queijaria_resgate";
 
 /* ===================== app / navegação ===================== */
 async function abrirApp(){
@@ -1373,8 +1384,9 @@ const MAPA_BK = [
   ["lotes","lotes"],["recebimentos","recebimentos_leite"],["vendas","vendas"],
   ["cheques","cheques"],["descontos","descontos"]
 ];
-function baixarBackup(){
-  const blob = new Blob([JSON.stringify(state, null, 2)], { type:"application/json" });
+function baixarBackup(dados){
+  const d = dados || state;
+  const blob = new Blob([JSON.stringify(d, null, 2)], { type:"application/json" });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
   a.download = `backup-queijaria-${hoje()}.json`;
@@ -1382,30 +1394,35 @@ function baixarBackup(){
   toast("Backup baixado. Guarde esse arquivo! ✅");
 }
 function abrirResgate(){
+  let falta = null;
+  try { falta = JSON.parse(localStorage.getItem(RESGATE_KEY) || "null"); } catch(e){}
+  const fonte = (falta && Object.keys(falta).length) ? falta : null;
+  const dados = fonte || state;   // se não há "faltando", usa o estado atual (backup normal)
   const linhas = MAPA_BK.map(([k,t]) => {
-    const n = Array.isArray(state[k]) ? state[k].length : 0;
+    const n = Array.isArray(dados[k]) ? dados[k].length : 0;
     return n ? `<div class="pg-forn-l"><span>${t}</span><b class="cf-val">${n}</b></div>` : "";
   }).join("");
-  const total = MAPA_BK.reduce((s,[k]) => s + (Array.isArray(state[k]) ? state[k].length : 0), 0);
+  const total = MAPA_BK.reduce((s,[k]) => s + (Array.isArray(dados[k]) ? dados[k].length : 0), 0);
   abrirFolha(`
     <h2>🛟 Resgate de dados</h2>
-    ${precisaRestaurar ? `<div class="pg-alerta" style="margin-bottom:10px">⚠️ O banco está <b>vazio</b>, mas este aparelho ainda tem uma <b>cópia dos dados</b>. Baixe o backup e restaure.</div>` : ""}
-    <div class="rotulo">Cópia neste aparelho — ${total} registros</div>
-    <div style="max-height:32vh;overflow-y:auto;margin-bottom:12px">${linhas || vazioCad("Nada nesta cópia.")}</div>
+    ${fonte ? `<div class="pg-alerta" style="margin-bottom:10px">⚠️ Este aparelho tem <b>${total} registros</b> que <b>não estão no banco</b>. Baixe o backup e envie.</div>`
+            : `<p class="dica" style="margin-top:-6px">Baixe uma cópia de segurança dos seus dados.</p>`}
+    <div class="rotulo">${fonte ? "Só o que falta no banco" : "Cópia neste aparelho"} — ${total} registros</div>
+    <div style="max-height:30vh;overflow-y:auto;margin-bottom:12px">${linhas || vazioCad("Nada a enviar — o banco já tem tudo deste aparelho.")}</div>
     <button class="btn btn-primario" id="rg-baixar" style="background:var(--ouro)">⬇️ Baixar backup (faça isso primeiro)</button>
-    ${total ? `<button class="btn btn-primario" id="rg-enviar" style="background:var(--verde);margin-top:6px">🛟 Restaurar tudo pro banco</button>` : ""}
+    ${total ? `<button class="btn btn-primario" id="rg-enviar" style="background:var(--verde);margin-top:6px">🛟 Enviar pro banco (${total})</button>` : ""}
     <button class="btn btn-fantasma" id="rg-fechar" style="margin-top:6px">Fechar</button>
     <div id="rg-log" style="font-family:'IBM Plex Mono',monospace;font-size:.72rem;color:var(--tinta-mole);margin-top:10px;max-height:22vh;overflow:auto"></div>`);
   $("#rg-fechar").onclick = fecharModal;
-  $("#rg-baixar").onclick = baixarBackup;
-  if(total) $("#rg-enviar").onclick = enviarResgate;
+  $("#rg-baixar").onclick = () => baixarBackup(dados);
+  if(total) $("#rg-enviar").onclick = () => enviarResgate(dados);
 }
-async function enviarResgate(){
-  const b = $("#rg-enviar"); b.disabled = true; b.textContent = "Restaurando…";
+async function enviarResgate(dados){
+  const b = $("#rg-enviar"); b.disabled = true; b.textContent = "Enviando…";
   const log = (m) => { $("#rg-log").innerHTML += m + "<br>"; $("#rg-log").scrollTop = 9e9; };
   let ok = 0, err = 0;
   for(const [k, tabela] of MAPA_BK){
-    const linhas = Array.isArray(state[k]) ? state[k] : [];
+    const linhas = Array.isArray(dados[k]) ? dados[k] : [];
     if(!linhas.length) continue;
     for(let i=0; i<linhas.length; i+=100){
       const bloco = linhas.slice(i, i+100);
@@ -1414,13 +1431,14 @@ async function enviarResgate(){
       else { ok += bloco.length; log(`✅ ${tabela}: ${Math.min(i+100, linhas.length)}/${linhas.length}`); }
     }
   }
-  if(state.config && state.config.familia_id){
-    await sb.from("queijaria_config").upsert(state.config, { onConflict:"familia_id" });
+  if(dados.config && dados.config.familia_id){
+    await sb.from("queijaria_config").upsert(dados.config, { onConflict:"familia_id" });
   }
-  log(`<br><b>Restaurados: ${ok}${err?` · Falharam: ${err}`:""}</b>`);
+  log(`<br><b>Enviados: ${ok}${err?` · Falharam: ${err}`:""}</b>`);
   b.textContent = "Concluído";
-  precisaRestaurar = false;
-  toast(err ? `Restaurados ${ok}, com ${err} erros.` : `${ok} registros restaurados! ✅`);
+  if(!err){ try { localStorage.removeItem(RESGATE_KEY); } catch(e){} precisaRestaurar = false; }
+  toast(err ? `Enviados ${ok}, com ${err} erros.` : `${ok} registros restaurados! ✅`);
+  await carregarTudo(); renderInicio();
 }
 
 // ===== Tempo real: recarrega e re-renderiza quando algo muda no banco =====
