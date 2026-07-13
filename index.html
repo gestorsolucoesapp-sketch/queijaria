@@ -320,6 +320,8 @@ body.leitura .cheque-card .nome, body.leitura .cheque-card .det, body.leitura .c
 .pg-chip{flex:none;border:1px solid var(--linha-forte);background:var(--card);color:var(--tinta);border-radius:20px;padding:7px 11px;font-size:.76rem;font-family:inherit;font-weight:700;cursor:pointer;white-space:nowrap}
 .pg-chip.on{background:var(--ouro);color:#fff;border-color:var(--ouro)}
 .pg-sug-lbl{font-size:.76rem;color:var(--tinta-mole);margin-top:7px}
+.pg-per{display:flex;align-items:center;gap:6px;font-size:.78rem;color:var(--ouro-esc);font-weight:700;margin-bottom:8px}
+.pg-per input{width:52px;border:1px solid var(--ouro);border-radius:8px;padding:5px 6px;font-family:'IBM Plex Mono',monospace;font-size:.82rem;text-align:center;background:var(--card);color:var(--tinta)}
 .chq-busca{position:relative;margin-bottom:14px}
 .chq-busca svg{position:absolute;left:13px;top:50%;transform:translateY(-50%);color:var(--tinta-mole);pointer-events:none}
 .chq-busca input{width:100%;padding:12px 40px;border:1px solid var(--linha-forte);border-radius:12px;font-size:16px;font-family:inherit;background:var(--card);color:var(--tinta)}
@@ -528,7 +530,7 @@ body.leitura .cheque-card .nome, body.leitura .cheque-card .det, body.leitura .c
    ======================================================================= */
 const SUPABASE_URL      = "https://cadnmgaymgljmoadebkk.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uBKKvD_e5ef4326TvkFgcg_rRnjmTus";
-const APP_VER = "v90";
+const APP_VER = "v91";
 const SPLASH_MIN = 2400;
 const EMAIL_ADMIN = "jpferreira1356@icloud.com";
 const splashT0 = Date.now();                              // suba junto com o cache do sw.js
@@ -2408,16 +2410,34 @@ function pagarComEscolha(ids){
     $("#pg-cheque").style.display = forma==="cheque" ? "" : "none";
   });
   const pintarSug = () => {
-    const d = $("#pg-venc").value || sug.data;
+    const s = sugerirDiaCheque();
+    let d = $("#pg-venc").value || s.data;
     const carga = cargaDoDia(d);
     const dias = diffDias(d);
-    const opts = sug.opcoes.map(o =>
+    const opts = s.opcoes.map(o =>
       `<button type="button" class="pg-chip ${o.data===d?"on":""}" data-sug="${o.data}">${dataBR(o.data).slice(0,5)} · ${o.carga>0?brl(o.carga):"livre"}</button>`).join("");
     $("#pg-sug").innerHTML = `
-      <div class="pg-sug-tit">${sug.melhor ? `💡 Dia mais tranquilo: <b>${dataBR(sug.melhor.data)}</b> (${sug.melhor.carga>0?`só ${brl(sug.melhor.carga)} nesse dia`:"nenhum cheque nesse dia"})` : ""}</div>
+      <div class="pg-per">
+        <span>Analisar de</span>
+        <input id="pg-de" type="number" inputmode="numeric" min="0" max="365" value="${chqJanela.de}">
+        <span>a</span>
+        <input id="pg-ate" type="number" inputmode="numeric" min="0" max="365" value="${chqJanela.ate}">
+        <span>dias</span>
+      </div>
+      <div class="pg-sug-tit">${s.melhor ? `💡 Dia mais tranquilo: <b>${dataBR(s.melhor.data)}</b> (${s.melhor.carga>0?`só ${brl(s.melhor.carga)} nesse dia`:"nenhum cheque nesse dia"})` : ""}</div>
       <div class="pg-chips">${opts}</div>
       <div class="pg-sug-lbl">Escolhido: <b>${dataBR(d)}</b> · ${dias} dias · ${carga>0?`já tem ${brl(carga)} caindo`:"nenhum cheque nesse dia"}</div>`;
     $$("[data-sug]").forEach(b => b.onclick = () => { $("#pg-venc").value = b.dataset.sug; pintarSug(); });
+    const aplicaJanela = () => {
+      const de = Math.max(0, parseInt($("#pg-de").value)||0);
+      const ate = Math.max(de, parseInt($("#pg-ate").value)||de);
+      chqJanela = { de, ate }; salvarJanela();
+      const nova = sugerirDiaCheque();
+      $("#pg-venc").value = nova.data;   // reposiciona no melhor dia da nova janela
+      pintarSug();
+    };
+    $("#pg-de").onchange = aplicaJanela;
+    $("#pg-ate").onchange = aplicaJanela;
   };
   $("#pg-venc").onchange = pintarSug;
   pintarSug();
@@ -2431,20 +2451,26 @@ function pagarComEscolha(ids){
     marcarPagoGrupo(ids, cheque);
   };
 }
+// janela (em dias) usada pra sugerir o melhor dia do cheque
+let chqJanela = { de:25, ate:30 };
+try{ const s = JSON.parse(localStorage.getItem("qb_chq_janela")||"null"); if(s && s.de && s.ate) chqJanela = s; }catch(e){}
+function salvarJanela(){ try{ localStorage.setItem("qb_chq_janela", JSON.stringify(chqJanela)); }catch(e){} }
 // quanto (em R$) já cai num determinado dia, em cheques ainda não compensados
 function cargaDoDia(d){
   return state.cheques.filter(c => !c.compensado && bomParaDe(c) === d)
                       .reduce((s,c)=> s+(Number(c.valor)||0), 0);
 }
-// sugere o dia mais tranquilo entre 25 e 30 dias a partir de hoje
+// sugere o dia mais tranquilo dentro da janela escolhida
 function sugerirDiaCheque(){
+  const de = Math.max(0, Number(chqJanela.de)||25);
+  const ate = Math.max(de, Number(chqJanela.ate)||30);
   const opcoes = [];
-  for(let n=25; n<=30; n++){
+  for(let n=de; n<=ate; n++){
     const data = addDias(hoje(), n);
     opcoes.push({ data, dias:n, carga: cargaDoDia(data) });
   }
   const melhor = [...opcoes].sort((a,b)=> a.carga - b.carga || a.dias - b.dias)[0];
-  return { opcoes, melhor, data: melhor ? melhor.data : addDias(hoje(), 30) };
+  return { opcoes, melhor, data: melhor ? melhor.data : addDias(hoje(), ate) };
 }
 
 async function marcarPagoGrupo(ids, cheque){
