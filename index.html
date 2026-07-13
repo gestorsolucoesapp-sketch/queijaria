@@ -539,7 +539,7 @@ body.leitura .cheque-card .nome, body.leitura .cheque-card .det, body.leitura .c
    ======================================================================= */
 const SUPABASE_URL      = "https://cadnmgaymgljmoadebkk.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uBKKvD_e5ef4326TvkFgcg_rRnjmTus";
-const APP_VER = "v95";
+const APP_VER = "v96";
 const SPLASH_MIN = 2400;
 const EMAIL_ADMIN = "jpferreira1356@icloud.com";
 const splashT0 = Date.now();                              // suba junto com o cache do sw.js
@@ -2528,9 +2528,10 @@ async function marcarPagoGrupo(ids, cheque){
   // consumir descontos pendentes do(s) fornecedor(es) pagos
   const fids = [...new Set(alvo.map(r=>r.fornecedor_id))];
   const descUsar = state.descontos.filter(d => fids.includes(d.fornecedor_id) && !d.usado);
+  const emPg = hoje();
   if(descUsar.length){
-    descUsar.forEach(d => d.usado = true);
-    dbw("descontos").update({ usado:true }).in("id", descUsar.map(d=>d.id)).then(()=>{}, ()=>{});
+    descUsar.forEach(d => { d.usado = true; d.usado_em = emPg; });
+    dbw("descontos").update({ usado:true, usado_em:emPg }).in("id", descUsar.map(d=>d.id)).then(()=>{}, ()=>{});
   }
   // se pagou com cheque, lança no controle de cheques
   if(cheque && cheque.valor > 0){
@@ -2612,44 +2613,74 @@ function abrirPagamentoFeito(g){
   const opcoesChq = cands.map(c =>
     `<label class="pf-chq"><input type="checkbox" class="pf-cb" value="${c.id}" ${sugerido && c.id===sugerido.id ? "checked":""}>
       <span>${brl(c.valor)} · cai ${dataBR(bomParaDe(c))}${c.numero?` · nº ${esc(c.numero)}`:""}</span></label>`).join("");
+
+  // descontos consumidos por este pagamento (por data) — ou, em registros antigos, pela diferença de valor
+  const difDesc = sugerido ? Math.round((g.valor - (Number(sugerido.valor)||0)) * 100) / 100 : 0;
+  let descs = state.descontos.filter(d => d.usado && d.fornecedor_id === g.fid && d.usado_em === g.em);
+  if(!descs.length && difDesc > 0.02){
+    const antigos = state.descontos.filter(d => d.usado && d.fornecedor_id === g.fid && !d.usado_em);
+    const soma = antigos.reduce((s,d)=> s+(Number(d.valor)||0), 0);
+    if(Math.abs(soma - difDesc) < 0.02) descs = antigos;   // batem exatamente com o desconto aplicado
+  }
+  const totDesc = descs.reduce((s,d)=> s+(Number(d.valor)||0), 0);
+  const opcoesDesc = descs.map(d =>
+    `<label class="pf-chq"><input type="checkbox" class="pf-dc" value="${d.id}" checked>
+      <span>${brl(d.valor)}${d.descricao?` · ${esc(d.descricao)}`:""} · ${dataBR(d.data)}</span></label>`).join("");
+
   abrirFolha(`
     <h2>Pagamento — ${esc(nome)}</h2>
-    <p class="dica" style="margin-top:-6px">Pago em <b>${dataBR(g.em)}</b> · ${g.itens.length} ${g.itens.length===1?"entrega":"entregas"} · ${num(g.litros)} L — <b>${brl(g.valor)}</b></p>
+    <p class="dica" style="margin-top:-6px">Pago em <b>${dataBR(g.em)}</b> · ${g.itens.length} ${g.itens.length===1?"entrega":"entregas"} · ${num(g.litros)} L — <b>${brl(g.valor)}</b>${totDesc>0?` − desconto ${brl(totDesc)}`:""}</p>
     <div class="rotulo">Entregas incluídas</div>
-    <div style="max-height:26vh;overflow-y:auto;margin-bottom:12px">${linhas}</div>
+    <div style="max-height:24vh;overflow-y:auto;margin-bottom:12px">${linhas}</div>
     ${cands.length ? `<div class="rotulo">Apagar junto o cheque deste pagamento?</div>
-      <div style="margin-bottom:12px">${opcoesChq}</div>
-      <p class="dica" style="margin-top:-6px">Desmarque se o cheque não for deste pagamento.</p>` : ""}
+      <div style="margin-bottom:10px">${opcoesChq}</div>` : ""}
+    ${descs.length ? `<div class="rotulo">Devolver os descontos usados?</div>
+      <div style="margin-bottom:10px">${opcoesDesc}</div>
+      <p class="dica" style="margin-top:-6px">Marcados voltam a ficar disponíveis pro próximo pagamento.</p>` : ""}
     ${!soLeitura ? `<button class="btn btn-primario" id="pf-desfazer" style="background:var(--vermelho)">↩︎ Desfazer pagamento (cliquei errado)</button>` : ""}
     <button class="btn btn-fantasma" id="pf-fechar" style="margin-top:6px">Fechar</button>`);
   $("#pf-fechar").onclick = fecharModal;
   if(!soLeitura) $("#pf-desfazer").onclick = () => {
     const ids = [...document.querySelectorAll(".pf-cb:checked")].map(i=>i.value);
     const chqs = state.cheques.filter(c => ids.includes(c.id));
+    const dids = [...document.querySelectorAll(".pf-dc:checked")].map(i=>i.value);
+    const dsc = state.descontos.filter(d => dids.includes(d.id));
     const totChq = chqs.reduce((s,c)=>s+(Number(c.valor)||0),0);
-    const msg = `Desfazer o pagamento de <b>${esc(nome)}</b> (${brl(g.valor)})?<br>As entregas voltam para "a pagar"${chqs.length?` e ${chqs.length===1?`o cheque de ${brl(totChq)} será apagado`:`${chqs.length} cheques (${brl(totChq)}) serão apagados`}`:""}.`;
-    confirmarAcao(msg, () => desfazerPagamento(g, chqs), { titulo:"Desfazer pagamento", ok:"Desfazer", corOk:"var(--vermelho)", corTexto:"#fff" });
+    const totD = dsc.reduce((s,d)=>s+(Number(d.valor)||0),0);
+    const partes = [`As entregas voltam para "a pagar"`];
+    if(chqs.length) partes.push(chqs.length===1 ? `o cheque de ${brl(totChq)} será apagado` : `${chqs.length} cheques (${brl(totChq)}) serão apagados`);
+    if(dsc.length) partes.push(`o desconto de ${brl(totD)} volta a ficar disponível`);
+    const msg = `Desfazer o pagamento de <b>${esc(nome)}</b> (${brl(g.valor)})?<br>${partes.join(", ")}.`;
+    confirmarAcao(msg, () => desfazerPagamento(g, chqs, dsc), { titulo:"Desfazer pagamento", ok:"Desfazer", corOk:"var(--vermelho)", corTexto:"#fff" });
   };
 }
 
-async function desfazerPagamento(g, chqs){
+async function desfazerPagamento(g, chqs, dsc){
   if(bloqueiaLeitura()) return;
-  chqs = chqs || [];
+  chqs = chqs || []; dsc = dsc || [];
   const ids = g.itens.map(r=>r.id);
   const bak = g.itens.map(r => ({ id:r.id, pago:r.pago, pago_em:r.pago_em }));
   g.itens.forEach(r => { r.pago = false; r.pago_em = null; });
   const chqBak = chqs.map(c => ({...c}));
   const chqIds = chqs.map(c=>c.id);
   if(chqIds.length) state.cheques = state.cheques.filter(c => !chqIds.includes(c.id));
+  // devolve os descontos
+  const dIds = dsc.map(d=>d.id);
+  dsc.forEach(d => { d.usado = false; d.usado_em = null; });
   fecharModal(); renderRecebimento();
-  toast(chqIds.length ? "Pagamento desfeito e cheque apagado. ↩︎" : "Pagamento desfeito. Voltou pra 'a pagar'. ↩︎");
+  const avisos = [];
+  if(chqIds.length) avisos.push("cheque apagado");
+  if(dIds.length) avisos.push("desconto devolvido");
+  toast("Pagamento desfeito" + (avisos.length ? ` — ${avisos.join(" e ")}. ↩︎` : ". Voltou pra 'a pagar'. ↩︎"));
   const { error } = await dbw("recebimentos_leite").update({ pago:false, pago_em:null }).in("id", ids);
   if(error){
     bak.forEach(b => { const r = state.recebimentos.find(x=>x.id===b.id); if(r){ r.pago=b.pago; r.pago_em=b.pago_em; } });
     chqBak.forEach(c => state.cheques.unshift(c));
+    dsc.forEach(d => { d.usado = true; d.usado_em = g.em; });
     renderRecebimento(); toast("Erro ao desfazer: "+(error.message||"?"), true);
     return;
   }
+  if(dIds.length) dbw("descontos").update({ usado:false, usado_em:null }).in("id", dIds).then(()=>{}, ()=>{});
   if(chqIds.length){
     const { error: e2 } = await dbw("cheques").delete().in("id", chqIds);
     if(e2){ chqBak.forEach(c => state.cheques.unshift(c)); renderRecebimento(); toast("Pagamento desfeito, mas não consegui apagar o cheque: "+(e2.message||"?"), true); }
