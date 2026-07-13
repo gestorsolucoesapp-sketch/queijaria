@@ -545,7 +545,7 @@ body.leitura.libera-baixa #btn-config{ display:inline-flex !important }
    ======================================================================= */
 const SUPABASE_URL      = "https://cadnmgaymgljmoadebkk.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uBKKvD_e5ef4326TvkFgcg_rRnjmTus";
-const APP_VER = "v106";
+const APP_VER = "v107";
 const SPLASH_MIN = 2400;
 const EMAIL_ADMIN = "jpferreira1356@icloud.com";
 const splashT0 = Date.now();                              // suba junto com o cache do sw.js
@@ -2179,6 +2179,18 @@ let leiteAba = "apagar";
 function mesAtual(){ return hoje().slice(0,7); }
 
 // preço por litro conforme a quantidade (faixa) ou preço padrão
+// calcula uma conta simples digitada pelo usuário: "80+65", "200-15,5", "3*40"
+function calcExpr(txt){
+  let s = String(txt ?? "").trim();
+  if(!s) return NaN;
+  s = s.replace(/\s+/g, "").replace(/,/g, ".").replace(/[xX]/g, "*").replace(/÷/g, "/");
+  if(!/^[0-9+\-*/().]+$/.test(s)) return NaN;   // só números e operadores
+  if(/[+\-*/.]$/.test(s)) s = s.slice(0, -1);   // ignora operador solto no fim
+  try {
+    const v = Function('"use strict";return (' + s + ')')();
+    return (typeof v === "number" && isFinite(v)) ? v : NaN;
+  } catch(e){ return NaN; }
+}
 function precoLitroPara(litros){
   const l = Number(litros)||0;
   const faixas = [...state.leiteFaixas].sort((a,b)=>(Number(a.litros_de)||0)-(Number(b.litros_de)||0));
@@ -3044,23 +3056,26 @@ function abrirModalRecebimento(id, fornPre){
     <div class="campo"><label>Fornecedor</label><select id="r-forn">${opts}</select></div>
     <div class="linha-campos">
       <div class="campo"><label>Data</label><input id="r-data" type="date" value="${r.data||""}"></div>
-      <div class="campo"><label>Litros</label><input id="r-litros" type="number" inputmode="decimal" value="${r.litros??""}" placeholder="0"></div>
+      <div class="campo"><label>Litros <span id="r-litros-tag" style="font-weight:400;color:var(--tinta-mole)"></span></label><input id="r-litros" type="text" inputmode="text" autocomplete="off" value="${r.litros??""}" placeholder="0 (ou 80+65)"></div>
     </div>
     <div class="campo">
       <label>Preço por litro (R$) <span id="r-preco-tag" style="font-weight:400;color:var(--tinta-mole)"></span></label>
-      <input id="r-preco" type="number" inputmode="decimal" step="0.01" value="${r.preco_litro??""}" placeholder="automático">
+      <input id="r-preco" type="text" inputmode="text" autocomplete="off" value="${r.preco_litro??""}" placeholder="automático">
     </div>
     <div class="previa" id="r-previa"></div>
     <div class="erro" id="r-erro"></div>
     <button class="btn btn-primario" id="r-salvar">Salvar</button>
     ${botaoExcluir(id?"r-excluir":"","Excluir recebimento")}`);
-  const precoAuto = () => precoLitroPara(parseFloat($("#r-litros").value)||0);
+  const precoAuto = () => precoLitroPara(calcExpr($("#r-litros").value) || 0);
   const precoUsado = () => {
-    const m = parseFloat($("#r-preco").value);
+    const m = calcExpr($("#r-preco").value);
     return (!isNaN(m) && m > 0) ? m : precoAuto();
   };
   const previa = () => {
-    const litros = parseFloat($("#r-litros").value)||0;
+    const bruto = $("#r-litros").value;
+    const litros = calcExpr(bruto) || 0;
+    const ehConta = /[+\-*/xX]/.test(String(bruto).slice(1));  // tem operador (ignora sinal inicial)
+    $("#r-litros-tag").textContent = (ehConta && litros > 0) ? `= ${num(litros, 2).replace(/,00$/,"")} L` : "";
     const pAuto = precoAuto();
     const pl = precoUsado();
     const manual = Math.abs(pl - pAuto) > 0.0001;
@@ -3090,11 +3105,11 @@ function abrirModalRecebimento(id, fornPre){
 async function salvarRecebimento(id){
   const fornecedor_id = $("#r-forn").value;
   const data = $("#r-data").value;
-  const litros = parseFloat($("#r-litros").value)||0;
+  const litros = calcExpr($("#r-litros").value) || 0;
   if(!fornecedor_id){ $("#r-erro").textContent = "Escolha o fornecedor."; return; }
   if(!data){ $("#r-erro").textContent = "Escolha a data da entrega."; return; }
   if(litros <= 0){ $("#r-erro").textContent = "Informe os litros."; return; }
-  const manual = parseFloat($("#r-preco").value);
+  const manual = calcExpr($("#r-preco").value);
   const preco_litro = (!isNaN(manual) && manual > 0) ? manual : precoLitroPara(litros);
   if(preco_litro <= 0){ $("#r-erro").textContent = `Sem preço pra ${num(litros)} L. Digite o preço por litro, ou cadastre a faixa em Cadastro › Leite.`; return; }
   const dados = { fornecedor_id, data, litros, preco_litro, valor_total: Math.round(litros*preco_litro*100)/100 };
