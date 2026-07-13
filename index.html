@@ -542,7 +542,7 @@ body.leitura.libera-baixa #btn-config{ display:inline-flex !important }
    ======================================================================= */
 const SUPABASE_URL      = "https://cadnmgaymgljmoadebkk.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uBKKvD_e5ef4326TvkFgcg_rRnjmTus";
-const APP_VER = "v97";
+const APP_VER = "v98";
 const SPLASH_MIN = 2400;
 const EMAIL_ADMIN = "jpferreira1356@icloud.com";
 const splashT0 = Date.now();                              // suba junto com o cache do sw.js
@@ -1362,6 +1362,7 @@ function iniciarRealtime(){
     { event: "*", schema: "public", table: t, filter: "familia_id=eq." + familiaId },
     () => agendarSync()));
   realtimeCanal.subscribe();
+  conectarPresenca();   // todo aparelho se anuncia, não só o do admin
   // rede volta / app volta pro foco → sincroniza
   window.addEventListener("online", agendarSync);
   document.addEventListener("visibilitychange", () => { if(!document.hidden) agendarSync(); });
@@ -1771,15 +1772,18 @@ function nomeDispositivo(){
   return s;
 }
 
+function conectarPresenca(){
+  if(presenceCanal || !familiaId) return;
+  presenceCanal = sb.channel("presenca-" + familiaId, { config: { presence: { key: meuDispositivo } } });
+  presenceCanal.on("presence", { event: "sync" }, () => { if($("#adm-online")) pintarOnline(); });
+  presenceCanal.subscribe(async (st) => {
+    if(st === "SUBSCRIBED") await presenceCanal.track({ nome: nomeDispositivo(), ver: APP_VER, desde: Date.now() });
+  });
+}
+
 async function abrirPainelAdmin(){
   // presença: quantos dispositivos online
-  if(!presenceCanal){
-    presenceCanal = sb.channel("presenca-" + familiaId, { config: { presence: { key: meuDispositivo } } });
-    presenceCanal.on("presence", { event: "sync" }, () => { if($("#adm-online")) pintarOnline(); });
-    presenceCanal.subscribe(async (st) => {
-      if(st === "SUBSCRIBED") await presenceCanal.track({ nome: nomeDispositivo(), ver: APP_VER, desde: Date.now() });
-    });
-  }
+  conectarPresenca();
 
   // números do negócio
   const hj = hoje(), mes = mesAtual();
