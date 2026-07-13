@@ -19,7 +19,7 @@
   --r:16px;
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-html,body{margin:0;padding:0}
+html,body{margin:0;padding:0;max-width:100%;overflow-x:hidden;overscroll-behavior-x:none}
 body{
   font-family:Inter,system-ui,sans-serif;color:var(--tinta);background:var(--fundo);
   -webkit-font-smoothing:antialiased;overscroll-behavior-y:none;
@@ -231,7 +231,10 @@ body.leitura .btn-queijo{display:none !important}
 .graf-card{background:var(--card);border:1px solid var(--linha);border-radius:var(--r);
   padding:14px 14px 8px;margin-bottom:12px;box-shadow:var(--sombra)}
 .graf-cab{margin-bottom:8px}
-.graf-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:6px}
+.graf-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:6px;max-width:100%;overscroll-behavior-x:contain}
+.tipo, .ciclo-cab, .resumo, .stat, .graf-card{max-width:100%;min-width:0}
+.tipo > div{min-width:0}
+.nome, .det{overflow-wrap:anywhere}
 .graf-scroll svg{display:block;flex:none}
 .graf-dica-scroll{text-align:center;font-size:.72rem;color:var(--tinta-mole);margin-top:4px}
 .adm-online{display:flex;align-items:center;gap:12px;background:var(--card);border:1px solid var(--linha);border-radius:12px;padding:12px 14px;box-shadow:var(--sombra)}
@@ -542,7 +545,7 @@ body.leitura.libera-baixa #btn-config{ display:inline-flex !important }
    ======================================================================= */
 const SUPABASE_URL      = "https://cadnmgaymgljmoadebkk.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uBKKvD_e5ef4326TvkFgcg_rRnjmTus";
-const APP_VER = "v101";
+const APP_VER = "v102";
 const SPLASH_MIN = 2400;
 const EMAIL_ADMIN = "jpferreira1356@icloud.com";
 const splashT0 = Date.now();                              // suba junto com o cache do sw.js
