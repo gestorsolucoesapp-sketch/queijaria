@@ -319,6 +319,12 @@ body.leitura .cheque-card .nome, body.leitura .cheque-card .det, body.leitura .c
 .pg-chips{display:flex;gap:6px;overflow-x:auto;padding-bottom:2px}
 .pg-chip{flex:none;border:1px solid var(--linha-forte);background:var(--card);color:var(--tinta);border-radius:20px;padding:7px 11px;font-size:.76rem;font-family:inherit;font-weight:700;cursor:pointer;white-space:nowrap}
 .pg-chip.on{background:var(--ouro);color:#fff;border-color:var(--ouro)}
+.pg-chip.forn{border-color:var(--vermelho);border-width:1.5px}
+.pg-chip.forn.on{background:var(--vermelho);border-color:var(--vermelho)}
+.pg-alerta{margin-top:8px;font-size:.78rem;color:var(--vermelho);line-height:1.4}
+.pg-forn{margin-top:9px;padding-top:8px;border-top:1px dashed var(--linha-forte)}
+.pg-forn-tit{font-size:.76rem;font-weight:700;color:var(--tinta-mole);margin-bottom:5px}
+.pg-forn-l{display:flex;justify-content:space-between;font-size:.76rem;color:var(--tinta-mole);padding:2px 0}
 .pg-sug-lbl{font-size:.76rem;color:var(--tinta-mole);margin-top:7px}
 .pg-per{display:flex;align-items:center;gap:6px;font-size:.78rem;color:var(--ouro-esc);font-weight:700;margin-bottom:8px}
 .pg-per input{width:52px;border:1px solid var(--ouro);border-radius:8px;padding:5px 6px;font-family:'IBM Plex Mono',monospace;font-size:.82rem;text-align:center;background:var(--card);color:var(--tinta)}
@@ -530,7 +536,7 @@ body.leitura .cheque-card .nome, body.leitura .cheque-card .det, body.leitura .c
    ======================================================================= */
 const SUPABASE_URL      = "https://cadnmgaymgljmoadebkk.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uBKKvD_e5ef4326TvkFgcg_rRnjmTus";
-const APP_VER = "v91";
+const APP_VER = "v92";
 const SPLASH_MIN = 2400;
 const EMAIL_ADMIN = "jpferreira1356@icloud.com";
 const splashT0 = Date.now();                              // suba junto com o cache do sw.js
@@ -2414,8 +2420,21 @@ function pagarComEscolha(ids){
     let d = $("#pg-venc").value || s.data;
     const carga = cargaDoDia(d);
     const dias = diffDias(d);
-    const opts = s.opcoes.map(o =>
-      `<button type="button" class="pg-chip ${o.data===d?"on":""}" data-sug="${o.data}">${dataBR(o.data).slice(0,5)} · ${o.carga>0?brl(o.carga):"livre"}</button>`).join("");
+    const mesmoForn = chequesFornDia(nome, d);
+    const opts = s.opcoes.map(o => {
+      const df = chequesFornDia(nome, o.data).length;
+      return `<button type="button" class="pg-chip ${o.data===d?"on":""} ${df?"forn":""}" data-sug="${o.data}">${df?"👤 ":""}${dataBR(o.data).slice(0,5)} · ${o.carga>0?brl(o.carga):"livre"}</button>`;
+    }).join("");
+    const meus = chequesDoForn(nome);
+    const listaForn = meus.length
+      ? `<div class="pg-forn">
+           <div class="pg-forn-tit">📋 Cheques em aberto de ${esc(nome)} (${meus.length})</div>
+           ${meus.map(c=>`<div class="pg-forn-l"><span>${dataBR(bomParaDe(c))} · ${diffDias(bomParaDe(c))<=0?"atrasado":diffDias(bomParaDe(c))+" dias"}</span><span class="cf-val">${brl(c.valor)}</span></div>`).join("")}
+         </div>`
+      : `<div class="pg-forn"><div class="pg-forn-tit" style="color:var(--verde)">✅ ${esc(nome)} não tem nenhum cheque em aberto.</div></div>`;
+    const alerta = mesmoForn.length
+      ? `<div class="pg-alerta">⚠️ Nesse dia já cai ${mesmoForn.length===1?"um cheque":mesmoForn.length+" cheques"} <b>desse mesmo fornecedor</b> (${brl(mesmoForn.reduce((x,c)=>x+(Number(c.valor)||0),0))})</div>`
+      : "";
     $("#pg-sug").innerHTML = `
       <div class="pg-per">
         <span>Analisar de</span>
@@ -2426,7 +2445,9 @@ function pagarComEscolha(ids){
       </div>
       <div class="pg-sug-tit">${s.melhor ? `💡 Dia mais tranquilo: <b>${dataBR(s.melhor.data)}</b> (${s.melhor.carga>0?`só ${brl(s.melhor.carga)} nesse dia`:"nenhum cheque nesse dia"})` : ""}</div>
       <div class="pg-chips">${opts}</div>
-      <div class="pg-sug-lbl">Escolhido: <b>${dataBR(d)}</b> · ${dias} dias · ${carga>0?`já tem ${brl(carga)} caindo`:"nenhum cheque nesse dia"}</div>`;
+      <div class="pg-sug-lbl">Escolhido: <b>${dataBR(d)}</b> · ${dias} dias · ${carga>0?`já tem ${brl(carga)} caindo`:"nenhum cheque nesse dia"}</div>
+      ${alerta}
+      ${listaForn}`;
     $$("[data-sug]").forEach(b => b.onclick = () => { $("#pg-venc").value = b.dataset.sug; pintarSug(); });
     const aplicaJanela = () => {
       const de = Math.max(0, parseInt($("#pg-de").value)||0);
@@ -2459,6 +2480,19 @@ function salvarJanela(){ try{ localStorage.setItem("qb_chq_janela", JSON.stringi
 function cargaDoDia(d){
   return state.cheques.filter(c => !c.compensado && bomParaDe(c) === d)
                       .reduce((s,c)=> s+(Number(c.valor)||0), 0);
+}
+// cheques pendentes de um fornecedor específico que caem num dia
+function chequesFornDia(nome, d){
+  const n = normTxt(nome);
+  if(!n) return [];
+  return state.cheques.filter(c => !c.compensado && bomParaDe(c) === d && normTxt(c.para) === n);
+}
+// todos os cheques pendentes desse fornecedor (pra listar as datas)
+function chequesDoForn(nome){
+  const n = normTxt(nome);
+  if(!n) return [];
+  return state.cheques.filter(c => !c.compensado && normTxt(c.para) === n)
+                      .sort((a,b)=> bomParaDe(a).localeCompare(bomParaDe(b)));
 }
 // sugere o dia mais tranquilo dentro da janela escolhida
 function sugerirDiaCheque(){
