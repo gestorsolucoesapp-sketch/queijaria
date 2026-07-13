@@ -267,10 +267,13 @@ body.leitura .mini-acao,
 body.leitura .btn-pago,
 body.leitura .btn-desc,
 body.leitura .check-baixa,
-body.leitura .btn-scan,
-body.leitura #btn-config{ display:none !important; }
+body.leitura .btn-scan{ display:none !important; }
 body.leitura .cheque-card{ pointer-events:none }
 body.leitura .cheque-card .nome, body.leitura .cheque-card .det, body.leitura .cheque-card .preco{ pointer-events:auto }
+/* aparelho autorizado: pode dar baixa mesmo em modo leitura */
+body.leitura.libera-baixa .check-baixa{ display:grid !important; pointer-events:auto }
+body.leitura.libera-baixa .cheque-card{ pointer-events:auto }
+body.leitura.libera-baixa #btn-config{ display:inline-flex !important }
 .cfg-aba{display:flex;align-items:center;gap:10px;padding:9px 4px;font-weight:600;border-bottom:1px solid var(--linha)}
 .cfg-aba input{width:20px;height:20px;accent-color:var(--ouro)}
 .icone-btn.leitura-on{ color:var(--vermelho) }
@@ -539,7 +542,7 @@ body.leitura .cheque-card .nome, body.leitura .cheque-card .det, body.leitura .c
    ======================================================================= */
 const SUPABASE_URL      = "https://cadnmgaymgljmoadebkk.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uBKKvD_e5ef4326TvkFgcg_rRnjmTus";
-const APP_VER = "v96";
+const APP_VER = "v97";
 const SPLASH_MIN = 2400;
 const EMAIL_ADMIN = "jpferreira1356@icloud.com";
 const splashT0 = Date.now();                              // suba junto com o cache do sw.js
@@ -552,9 +555,25 @@ let familiaNome = "";
 let privado = false;
 let soLeitura = false;
 try { soLeitura = localStorage.getItem("modo_leitura") === "1"; } catch(e){}
+let podeBaixa = false;   // permissão só deste aparelho: dar baixa em cheque mesmo em modo leitura
+try { podeBaixa = localStorage.getItem("pode_baixa_cheque") === "1"; } catch(e){}
+function setPodeBaixa(v){
+  podeBaixa = !!v;
+  try { localStorage.setItem("pode_baixa_cheque", v ? "1" : "0"); } catch(e){}
+  document.body.classList.toggle("libera-baixa", podeBaixa);
+  renderRecebimento && refreshCheques();
+}
 function bloqueiaLeitura(){ if(soLeitura){ toast("👀 Modo leitura — destrave no cadeado pra editar."); return true; } return false; }
+// bloqueio específico da baixa de cheque: respeita a liberação deste aparelho
+function bloqueiaBaixa(){
+  if(!soLeitura) return false;
+  if(podeBaixa) return false;
+  toast("👀 Modo leitura — destrave no cadeado pra editar.");
+  return true;
+}
 function aplicarLeitura(){
   document.body.classList.toggle("leitura", soLeitura);
+  document.body.classList.toggle("libera-baixa", podeBaixa);
   const b = $("#btn-leitura");
   if(b){
     b.title = soLeitura ? "Modo leitura ativo (toque pra destravar)" : "Ativar modo leitura";
@@ -1687,7 +1706,25 @@ async function salvarAbasVisiveis(){
   if(error) toast("Erro ao salvar abas: "+(error.message||"?"), true);
 }
 function abrirModalConfig(){
-  if(bloqueiaLeitura()) return;
+  const secaoAparelho = `
+    <div class="rotulo" style="margin-top:4px">Este aparelho</div>
+    <label class="cfg-aba" style="border:1px solid var(--linha-forte);border-radius:12px;padding:12px;margin-bottom:6px">
+      <input type="checkbox" id="cfg-baixa" ${podeBaixa?"checked":""}>
+      <span style="flex:1">Pode dar baixa em cheque<br><span style="font-weight:400;font-size:.78rem;color:var(--tinta-mole)">Mesmo com o app em modo leitura (cadeado). Vale só neste celular.</span></span>
+    </label>`;
+  if(soLeitura){
+    abrirFolha(`
+      <h2>Configurações</h2>
+      <p class="dica" style="margin-top:-6px">👀 Modo leitura ativo. Aqui você só ajusta o que vale neste aparelho.</p>
+      ${secaoAparelho}
+      <button class="btn btn-fantasma" id="cfg-fechar" style="margin-top:10px">Fechar</button>`);
+    $("#cfg-fechar").onclick = fecharModal;
+    $("#cfg-baixa").onchange = (e) => {
+      setPodeBaixa(e.target.checked);
+      toast(e.target.checked ? "Este aparelho já pode dar baixa em cheque. ✅" : "Baixa de cheque bloqueada neste aparelho.");
+    };
+    return;
+  }
   const vis = abasVisiveisSet();
   const secaoAbas = ehAdmin() ? `
     <div class="rotulo" style="margin-top:4px">Abas visíveis para a equipe</div>
@@ -1699,12 +1736,17 @@ function abrirModalConfig(){
     <h2>Configurações</h2>
     ${ehAdmin() ? `<button class="btn btn-primario" id="cfg-admin" style="margin-bottom:14px">📊 Painel do administrador</button>` : ""}
     ${secaoAbas}
+    ${secaoAparelho}
     <div class="rotulo" style="margin-top:4px">Zona de perigo</div>
     <p class="dica">Apaga <b>todos os dados</b> da queijaria: fornecedores, queijos, insumos, recebimentos, lotes, faixas de preço e configurações. A conta e a família continuam. <b>Não tem volta.</b></p>
     <div class="campo"><label>Confirme com a senha da sua conta</label><input id="cfg-senha" type="password" autocomplete="current-password" placeholder="••••••••"></div>
     <div class="erro" id="cfg-erro"></div>
     <button class="btn btn-primario" id="cfg-zerar" style="background:var(--vermelho)">Começar do zero</button>`);
   $("#cfg-zerar").onclick = comecarDoZero;
+  $("#cfg-baixa").onchange = (e) => {
+    setPodeBaixa(e.target.checked);
+    toast(e.target.checked ? "Este aparelho já pode dar baixa em cheque. ✅" : "Baixa de cheque bloqueada neste aparelho.");
+  };
   if(ehAdmin()){
     $("#cfg-admin").onclick = abrirPainelAdmin;
     $("#cfg-abas-salvar").onclick = salvarAbasVisiveis;
@@ -3283,7 +3325,7 @@ async function salvarCheque(id){
   }
 }
 function alternarBaixaCheque(id){
-  if(bloqueiaLeitura()) return;
+  if(bloqueiaBaixa()) return;
   const c = state.cheques.find(x=>x.id===id);
   if(!c) return;
   const dando = !c.compensado;
@@ -3309,7 +3351,7 @@ async function aplicarBaixaCheque(id){
   if(error){ Object.assign(c, bak); refreshCheques(); toast("Erro: "+(error.message||"?"), true); }
 }
 async function marcarCompensado(id){
-  if(bloqueiaLeitura()) return;
+  if(bloqueiaBaixa()) return;
   const c = state.cheques.find(x=>x.id===id);
   if(!c) return;
   const bak = { compensado:c.compensado, compensado_em:c.compensado_em };
