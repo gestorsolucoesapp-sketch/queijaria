@@ -583,7 +583,7 @@ body.leitura.libera-baixa #btn-config{ display:inline-flex !important }
    ======================================================================= */
 const SUPABASE_URL      = "https://cadnmgaymgljmoadebkk.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uBKKvD_e5ef4326TvkFgcg_rRnjmTus";
-const APP_VER = "v118";
+const APP_VER = "v119";
 const SPLASH_MIN = 2400;
 const EMAIL_ADMIN = "jpferreira1356@icloud.com";
 const splashT0 = Date.now();                              // suba junto com o cache do sw.js
@@ -1754,7 +1754,8 @@ function renderInicio(){
     const fim = addDias(ancora, (cAtual+1)*prazo - 1);   // último dia do ciclo em aberto
     const faltam = diasEntre(hoje(), fim);
     const ini = addDias(ancora, cAtual*prazo);
-    const doCiclo = recs.filter(r => r.data >= ini && r.data <= fim);
+    const doCiclo = recs.filter(r => r.data >= ini && r.data <= fim && !r.pago);   // só o que está em aberto
+    if(!doCiclo.length) return null;                       // ciclo já pago/fechado → não mostra
     const litros = doCiclo.reduce((s,r)=> s+(Number(r.litros)||0),0);
     const valor  = doCiclo.reduce((s,r)=> s+(Number(r.valor_total)||0),0);
     return { f, fim, faltam, litros, valor };
