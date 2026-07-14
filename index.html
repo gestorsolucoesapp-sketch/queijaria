@@ -343,6 +343,27 @@ body.leitura.libera-baixa #btn-config{ display:inline-flex !important }
 .pg-parc{border:1px solid var(--linha-forte);border-radius:12px;padding:10px 12px;margin-bottom:8px;background:var(--card)}
 .pg-parc-cab{display:flex;justify-content:space-between;align-items:center;font-size:.8rem;color:var(--ouro-esc);margin-bottom:6px}
 .pg-parc-x{border:none;background:none;color:var(--vermelho);font-size:.76rem;font-weight:700;font-family:inherit;cursor:pointer;padding:0}
+/* agenda */
+.ag-nav{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+.ag-seta{width:38px;height:38px;border:1px solid var(--linha-forte);background:var(--card);border-radius:10px;font-size:1.3rem;color:var(--ouro-esc);cursor:pointer}
+.ag-grade{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+.ag-cab{text-align:center;font-size:.68rem;font-weight:800;color:var(--tinta-mole);padding:2px 0}
+.ag-cel{position:relative;aspect-ratio:1;display:grid;place-items:center;font-size:.82rem;font-family:'IBM Plex Mono',monospace;border-radius:9px;background:var(--card);border:1px solid var(--linha);cursor:pointer}
+.ag-cel.vazia{background:none;border:none;cursor:default}
+.ag-cel.fer{color:var(--vermelho);font-weight:800;border-color:var(--vermelho)}
+.ag-cel.hj{background:#fff6e6;border-color:var(--ouro)}
+.ag-cel.sel{background:var(--ouro);color:#fff;border-color:var(--ouro)}
+.ag-ponto{position:absolute;bottom:4px;width:5px;height:5px;border-radius:50%;background:var(--azul)}
+.ag-cel.sel .ag-ponto{background:#fff}
+.ag-add{display:flex;gap:6px;margin-bottom:8px}
+.ag-add input{flex:1;min-width:0;padding:11px 12px;border:1px solid var(--linha-forte);border-radius:12px;font-size:16px;font-family:inherit;background:var(--card)}
+.ag-add button{width:46px;border:none;border-radius:12px;background:var(--ouro);color:#fff;font-size:1.3rem;cursor:pointer}
+.ag-tar{display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--linha);border-radius:12px;margin-bottom:6px;background:var(--card)}
+.ag-tar.ok .ag-txt{text-decoration:line-through;opacity:.5}
+.ag-check{width:26px;height:26px;flex:none;border-radius:8px;border:2px solid var(--linha-forte);background:var(--card);cursor:pointer;display:grid;place-items:center;padding:0}
+.ag-check.on{background:var(--verde);border-color:var(--verde)}
+.ag-txt{flex:1;font-size:.92rem;overflow-wrap:anywhere}
+.ag-del{border:none;background:none;color:var(--tinta-mole);font-size:.9rem;cursor:pointer;padding:4px}
 .pg-sug-lbl{font-size:.76rem;color:var(--tinta-mole);margin-top:7px}
 .pg-per{display:flex;align-items:center;gap:6px;font-size:.78rem;color:var(--ouro-esc);font-weight:700;margin-bottom:8px}
 .pg-per input{width:52px;border:1px solid var(--ouro);border-radius:8px;padding:5px 6px;font-family:'IBM Plex Mono',monospace;font-size:.82rem;text-align:center;background:var(--card);color:var(--tinta)}
@@ -479,6 +500,9 @@ body.leitura.libera-baixa #btn-config{ display:inline-flex !important }
       <span id="fila-badge" class="fila-badge" style="display:none"></span>
     </div>
     <div class="topo-acoes">
+      <button class="icone-btn" id="btn-agenda" title="Agenda">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+      </button>
       <button class="icone-btn" id="btn-config" title="Configurações">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.09a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.09a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
       </button>
@@ -554,7 +578,7 @@ body.leitura.libera-baixa #btn-config{ display:inline-flex !important }
    ======================================================================= */
 const SUPABASE_URL      = "https://cadnmgaymgljmoadebkk.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uBKKvD_e5ef4326TvkFgcg_rRnjmTus";
-const APP_VER = "v115";
+const APP_VER = "v116";
 const SPLASH_MIN = 2400;
 const EMAIL_ADMIN = "jpferreira1356@icloud.com";
 const splashT0 = Date.now();                              // suba junto com o cache do sw.js
@@ -1038,6 +1062,7 @@ function traduzErro(m=""){
 
 $("#btn-sair").onclick = async () => { await sb.auth.signOut(); location.reload(); };
 $("#btn-config").onclick = () => abrirModalConfig();
+$("#btn-agenda").onclick = () => { agDia = hoje(); agMes = hoje().slice(0,7); abrirAgenda(); };
 $("#btn-ia").onclick = () => abrirChatIA();
 $("#fab-ia").onclick = () => abrirChatIA();
 
@@ -1371,6 +1396,110 @@ async function carregarTudo(){
 }
 let precisaRestaurar = false, resgatePendente = 0;
 const RESGATE_KEY = "queijaria_resgate";
+
+/* ===================== 📅 AGENDA (feriados + afazeres) ===================== */
+function pascoa(ano){ // algoritmo de Meeus
+  const a=ano%19,b=Math.floor(ano/100),c=ano%100,d=Math.floor(b/4),e=b%4,f=Math.floor((b+8)/25),
+        g=Math.floor((b-f+1)/3),h=(19*a+b-d-g+15)%30,i=Math.floor(c/4),k=c%4,
+        l=(32+2*e+2*i-h-k)%7,m=Math.floor((a+11*h+22*l)/451),
+        mes=Math.floor((h+l-7*m+114)/31), dia=((h+l-7*m+114)%31)+1;
+  return new Date(ano, mes-1, dia);
+}
+function feriadosDoAno(ano){
+  const f = {};
+  const põe = (d, nome) => { f[fmtLocal(d)] = nome; };
+  põe(new Date(ano,0,1), "Confraternização Universal");
+  põe(new Date(ano,3,21), "Tiradentes");
+  põe(new Date(ano,4,1), "Dia do Trabalho");
+  põe(new Date(ano,8,7), "Independência");
+  põe(new Date(ano,9,12), "N. Sra. Aparecida");
+  põe(new Date(ano,10,2), "Finados");
+  põe(new Date(ano,10,15), "Proclamação da República");
+  põe(new Date(ano,10,20), "Consciência Negra");
+  põe(new Date(ano,11,25), "Natal");
+  const p = pascoa(ano);
+  const soma = (dias) => { const d = new Date(p); d.setDate(d.getDate()+dias); return d; };
+  põe(soma(-48), "Carnaval (seg)"); põe(soma(-47), "Carnaval (ter)");
+  põe(soma(-2), "Sexta-feira Santa"); põe(p, "Páscoa"); põe(soma(60), "Corpus Christi");
+  return f;
+}
+let agMes = hoje().slice(0,7);   // "AAAA-MM" exibido
+let agDia = hoje();              // dia selecionado
+function agTarefas(){ state.config = state.config || {}; if(!Array.isArray(state.config.agenda)) state.config.agenda = []; return state.config.agenda; }
+function agSalvar(){
+  dbw("queijaria_config").upsert({ familia_id:familiaId, agenda: agTarefas() }).then(()=>{}, ()=>{});
+}
+function abrirAgenda(){
+  const [ano, mes] = agMes.split("-").map(Number);
+  const fer = { ...feriadosDoAno(ano-1), ...feriadosDoAno(ano), ...feriadosDoAno(ano+1) };
+  const prim = new Date(ano, mes-1, 1);
+  const nDias = new Date(ano, mes, 0).getDate();
+  const ini = prim.getDay();  // 0=dom
+  const tarefas = agTarefas();
+  const temTarefa = {};
+  tarefas.forEach(t => { if(t.data && !t.feito) temTarefa[t.data] = true; });
+  let cels = "";
+  for(let i=0;i<ini;i++) cels += `<div class="ag-cel vazia"></div>`;
+  for(let d=1; d<=nDias; d++){
+    const iso = `${ano}-${String(mes).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
+    const ehFer = fer[iso], ehHoje = iso === hoje(), sel = iso === agDia;
+    cels += `<div class="ag-cel ${ehFer?"fer":""} ${ehHoje?"hj":""} ${sel?"sel":""}" data-agd="${iso}">
+      ${d}${temTarefa[iso]?`<span class="ag-ponto"></span>`:""}
+    </div>`;
+  }
+  const nomeMes = prim.toLocaleDateString("pt-BR", { month:"long", year:"numeric" });
+  const ferDia = fer[agDia];
+  const doDia = tarefas.filter(t => t.data === agDia).sort((a,b)=> (a.feito?1:0)-(b.feito?1:0));
+  const sem = tarefas.filter(t => !t.data && !t.feito);
+  const linha = (t) => `
+    <div class="ag-tar ${t.feito?"ok":""}">
+      <button class="ag-check ${t.feito?"on":""}" data-agok="${t.id}">${t.feito?`<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`:""}</button>
+      <span class="ag-txt">${esc(t.texto)}</span>
+      <button class="ag-del" data-agdel="${t.id}">✕</button>
+    </div>`;
+  abrirFolha(`
+    <h2>📅 Agenda</h2>
+    <div class="ag-nav">
+      <button class="ag-seta" id="ag-ant">‹</button>
+      <b style="text-transform:capitalize">${nomeMes}</b>
+      <button class="ag-seta" id="ag-prox">›</button>
+    </div>
+    <div class="ag-grade">
+      ${["D","S","T","Q","Q","S","S"].map(x=>`<div class="ag-cab">${x}</div>`).join("")}
+      ${cels}
+    </div>
+    <div class="rotulo" style="margin-top:10px">${dataBR(agDia)}${ferDia?` · <span style="color:var(--vermelho)">🎉 ${ferDia}</span>`:""}</div>
+    <div class="ag-add">
+      <input id="ag-novo" placeholder="Novo afazer pra esse dia…" autocomplete="off">
+      <button id="ag-addbtn">＋</button>
+    </div>
+    <div id="ag-lista">${doDia.length ? doDia.map(linha).join("") : `<p class="dica">Nada nesse dia. Adicione acima. 👆</p>`}</div>
+    ${sem.length ? `<div class="rotulo" style="margin-top:10px">Sem data</div>${sem.map(linha).join("")}` : ""}
+    <button class="btn btn-fantasma" id="ag-fechar" style="margin-top:10px">Fechar</button>`);
+  $("#ag-fechar").onclick = fecharModal;
+  $("#ag-ant").onclick = () => { const d = new Date(ano, mes-2, 1); agMes = fmtLocal(d).slice(0,7); abrirAgenda(); };
+  $("#ag-prox").onclick = () => { const d = new Date(ano, mes, 1); agMes = fmtLocal(d).slice(0,7); abrirAgenda(); };
+  $$("[data-agd]").forEach(c => c.onclick = () => { agDia = c.dataset.agd; abrirAgenda(); });
+  const add = () => {
+    const txt = $("#ag-novo").value.trim();
+    if(!txt) return;
+    agTarefas().unshift({ id:uid(), texto:txt, data:agDia, feito:false, criado_em:new Date().toISOString() });
+    agSalvar(); abrirAgenda();
+  };
+  $("#ag-addbtn").onclick = add;
+  $("#ag-novo").addEventListener("keydown", e => { if(e.key==="Enter") add(); });
+  $$("[data-agok]").forEach(b => b.onclick = () => {
+    const t = agTarefas().find(x=>x.id===b.dataset.agok);
+    if(t){ t.feito = !t.feito; agSalvar(); abrirAgenda(); }
+  });
+  $$("[data-agdel]").forEach(b => b.onclick = () => {
+    const t = agTarefas().find(x=>x.id===b.dataset.agdel);
+    confirmarAcao(`Apagar o afazer <b>"${esc(t?t.texto:"?")}"</b>?`, () => {
+      state.config.agenda = agTarefas().filter(x=>x.id!==b.dataset.agdel);
+      agSalvar(); abrirAgenda();
+    }, { titulo:"Apagar afazer", ok:"Apagar", corOk:"var(--vermelho)", corTexto:"#fff" });
+  });
+}
 
 /* ===================== app / navegação ===================== */
 async function abrirApp(){
