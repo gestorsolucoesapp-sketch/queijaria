@@ -551,7 +551,7 @@ body.leitura.libera-baixa #btn-config{ display:inline-flex !important }
    ======================================================================= */
 const SUPABASE_URL      = "https://cadnmgaymgljmoadebkk.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uBKKvD_e5ef4326TvkFgcg_rRnjmTus";
-const APP_VER = "v112";
+const APP_VER = "v113";
 const SPLASH_MIN = 2400;
 const EMAIL_ADMIN = "jpferreira1356@icloud.com";
 const splashT0 = Date.now();                              // suba junto com o cache do sw.js
@@ -2348,11 +2348,23 @@ function autoFecharCiclos(){
   const ids = paraFechar.map(r=>r.id);
   dbw("recebimentos_leite").update({ ciclo_fechado:true }).in("id", ids).then(()=>{}, ()=>{});
 }
-// fechamento FORÇADO: fecha tudo que já venceu, inclusive os reabertos (ciclo_fechado=false)
+// fechamento FORÇADO: fecha por CICLO — tudo que pertence a ciclos já encerrados
 function fecharCiclosVencidosForcado(){
   if(bloqueiaLeitura()) return;
   const hj = hoje();
-  const alvo = state.recebimentos.filter(r => !r.pago && r.ciclo_fechado !== true && vencimentoDe(r) <= hj);
+  const alvo = [];
+  state.fornecedores.forEach(f => {
+    const recsAll = state.recebimentos.filter(r => r.fornecedor_id === f.id);
+    if(!recsAll.length) return;
+    const prazo = Number(f.prazo_pagamento)||30;
+    const ancora = recsAll.map(r=>r.data).sort()[0];   // 1ª entrega = início do 1º ciclo
+    recsAll.forEach(r => {
+      if(r.pago || r.ciclo_fechado === true) return;
+      const c = Math.max(0, Math.floor(diasEntre(ancora, r.data) / prazo));
+      const fim = addDias(ancora, (c+1)*prazo - 1);    // último dia do ciclo dessa entrega
+      if(hj > fim) alvo.push(r);                        // ciclo já encerrou → fecha
+    });
+  });
   if(!alvo.length){ toast("Nenhum ciclo vencido pra fechar. ✅"); return; }
   const porForn = {};
   alvo.forEach(r => {
