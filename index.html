@@ -40,8 +40,9 @@ input,select{font-family:inherit;font-size:16px}
   box-shadow:var(--sombra);padding:22px;width:100%;max-width:400px;text-align:left}
 .campo{margin-bottom:14px}
 .campo label{display:block;font-size:13px;font-weight:600;color:var(--tinta-mole);margin-bottom:6px}
-.campo input,.campo select{width:100%;padding:12px 14px;border:1px solid var(--linha-forte);
+.campo input,.campo select{width:100%;max-width:100%;min-width:0;padding:12px 14px;border:1px solid var(--linha-forte);
   border-radius:12px;background:#fff;color:var(--tinta);outline:none;transition:border-color .15s}
+.campo input[type="date"]{display:block;-webkit-appearance:none;appearance:none;min-height:48px;text-align:left}
 .campo input:focus,.campo select:focus{border-color:var(--ouro)}
 .linha-campos{display:flex;gap:10px}
 .linha-campos>.campo{flex:1}
@@ -578,7 +579,7 @@ body.leitura.libera-baixa #btn-config{ display:inline-flex !important }
    ======================================================================= */
 const SUPABASE_URL      = "https://cadnmgaymgljmoadebkk.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uBKKvD_e5ef4326TvkFgcg_rRnjmTus";
-const APP_VER = "v116";
+const APP_VER = "v117";
 const SPLASH_MIN = 2400;
 const EMAIL_ADMIN = "jpferreira1356@icloud.com";
 const splashT0 = Date.now();                              // suba junto com o cache do sw.js
@@ -2775,7 +2776,7 @@ function pagarComEscolha(ids){
     </div>
     <div id="pg-cheque">
       <div id="pg-parcelas"></div>
-      <button type="button" class="btn btn-fantasma" id="pg-add" style="margin:4px 0 8px;padding:9px">＋ Dividir em outro cheque</button>
+      <button type="button" id="pg-add" style="width:100%;margin:4px 0 8px;padding:12px;border:2px dashed var(--ouro);background:#fff6e6;color:var(--ouro-esc);border-radius:12px;font-weight:800;font-family:inherit;font-size:.95rem;cursor:pointer">＋ Dividir em outro cheque</button>
       <div id="pg-resto" class="pg-sug-lbl" style="margin-bottom:8px"></div>
       <div id="pg-sug" class="pg-sug"></div>
     </div>
@@ -2837,6 +2838,7 @@ function pagarComEscolha(ids){
       parcelas.push({ valor: dif, data: s.data, numero: "" });
     }
     pintarParcelas(); pintarSug();
+    toast(`Cheque ${parcelas.length} adicionado. Ajuste valor e data. ✂️`);
   };
   pintarParcelas();
   const pintarSug = () => {
