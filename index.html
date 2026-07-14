@@ -583,7 +583,7 @@ body.leitura.libera-baixa #btn-config{ display:inline-flex !important }
    ======================================================================= */
 const SUPABASE_URL      = "https://cadnmgaymgljmoadebkk.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uBKKvD_e5ef4326TvkFgcg_rRnjmTus";
-const APP_VER = "v119";
+const APP_VER = "v120";
 const SPLASH_MIN = 2400;
 const EMAIL_ADMIN = "jpferreira1356@icloud.com";
 const splashT0 = Date.now();                              // suba junto com o cache do sw.js
@@ -1399,6 +1399,57 @@ async function carregarTudo(){
   state.tipos = t; state.lotes = l; state.fornecedores = f; state.leiteFaixas = lf; state.insumos = ins; state.fornInsumos = finsu; state.receitas = receitas; state.config = cfg; state.recebimentos = rec; state.vendas = vds; state.cheques = chq; state.descontos = dsc;
   salvarCacheEstado();
 }
+/* ===================== 💾 BACKUP AUTOMÁTICO DIÁRIO ===================== */
+const BK_ULT = "queijaria_bk_ultimo";
+async function backupAutomatico(){
+  if(!familiaId || !navigator.onLine) return;
+  let ult = null;
+  try { ult = localStorage.getItem(BK_ULT); } catch(e){}
+  if(ult === hoje()) return;                       // já fez hoje
+  const total = MAPA_BK.reduce((s,[k]) => s + (Array.isArray(state[k]) ? state[k].length : 0), 0);
+  if(total < 5) return;                            // não salva backup de app vazio
+  const dados = {};
+  MAPA_BK.forEach(([k]) => { dados[k] = state[k] || []; });
+  dados.config = state.config || {};
+  try {
+    await sb.from("backups").insert({
+      id: uid(), familia_id: familiaId, data: hoje(),
+      registros: total, dados
+    });
+    try { localStorage.setItem(BK_ULT, hoje()); } catch(e){}
+    // mantém os últimos 30
+    const { data: velhos } = await sb.from("backups").select("id,data")
+      .eq("familia_id", familiaId).order("data", { ascending:false });
+    if(velhos && velhos.length > 30){
+      const apagar = velhos.slice(30).map(b=>b.id);
+      await sb.from("backups").delete().in("id", apagar);
+    }
+  } catch(e){}
+}
+async function abrirBackupsSalvos(){
+  const { data, error } = await sb.from("backups").select("id,data,registros")
+    .eq("familia_id", familiaId).order("data", { ascending:false }).limit(30);
+  if(error){ toast("Backups ainda não configurados. Rode o SQL. ⚠️", true); return; }
+  if(!data || !data.length){ toast("Nenhum backup salvo ainda."); return; }
+  abrirFolha(`
+    <h2>💾 Backups automáticos</h2>
+    <p class="dica" style="margin-top:-6px">Uma cópia por dia, guardada no banco. Toque num dia pra restaurar.</p>
+    ${data.map(b=>`<div class="tipo" data-bk="${b.id}" style="cursor:pointer">
+      <div><div class="nome">${dataBR(b.data)}</div><div class="det">${b.registros} registros</div></div>
+      <div class="preco">restaurar</div></div>`).join("")}
+    <button class="btn btn-fantasma" id="bk-fechar" style="margin-top:10px">Fechar</button>`);
+  $("#bk-fechar").onclick = fecharModal;
+  $$("[data-bk]").forEach(el => el.onclick = async () => {
+    const b = data.find(x=>x.id===el.dataset.bk);
+    confirmarAcao(`Restaurar o backup de <b>${dataBR(b.data)}</b> (${b.registros} registros)?<br>Os dados desse dia voltam. Nada é apagado — o que já existe é mantido.`, async () => {
+      const { data: full } = await sb.from("backups").select("dados").eq("id", b.id).single();
+      if(!full || !full.dados){ toast("Não consegui ler esse backup.", true); return; }
+      fecharModal();
+      toast("Restaurando…");
+      await enviarResgate(full.dados);
+    }, { titulo:"Restaurar backup", ok:"Restaurar", corOk:"var(--verde)", corTexto:"#fff" });
+  });
+}
 let precisaRestaurar = false, resgatePendente = 0;
 const RESGATE_KEY = "queijaria_resgate";
 
@@ -1523,6 +1574,7 @@ async function abrirApp(){
   aplicarAbas();
   atualizarIndicadorFila(); processarFila();
   iniciarRealtime();
+  backupAutomatico();
   if(precisaRestaurar) setTimeout(abrirResgate, 400);
 }
 
@@ -2007,7 +2059,8 @@ function abrirModalConfig(){
     ${secaoAbas}
     ${secaoAparelho}
     <button class="btn btn-primario" id="cfg-fechar-ciclos" style="background:var(--verde);margin-bottom:6px">🔒 Fechar ciclos vencidos agora</button>
-    <button class="btn btn-primario" id="cfg-backup" style="background:var(--ouro);margin-bottom:14px">🛟 Backup e resgate de dados</button>
+    <button class="btn btn-primario" id="cfg-backup" style="background:var(--ouro);margin-bottom:6px">🛟 Backup e resgate de dados</button>
+    <button class="btn btn-primario" id="cfg-bks" style="background:var(--azul);margin-bottom:14px">💾 Backups automáticos (últimos 30 dias)</button>
     <div class="rotulo" style="margin-top:4px">Zona de perigo</div>
     <p class="dica">Apaga <b>todos os dados</b> da queijaria: fornecedores, queijos, insumos, recebimentos, lotes, faixas de preço e configurações. A conta e a família continuam. <b>Não tem volta.</b></p>
     <div class="campo"><label>Confirme com a senha da sua conta</label><input id="cfg-senha" type="password" autocomplete="current-password" placeholder="••••••••"></div>
@@ -2015,6 +2068,7 @@ function abrirModalConfig(){
     <button class="btn btn-primario" id="cfg-zerar" style="background:var(--vermelho)">Começar do zero</button>`);
   $("#cfg-zerar").onclick = comecarDoZero;
   $("#cfg-backup").onclick = abrirResgate;
+  $("#cfg-bks").onclick = abrirBackupsSalvos;
   $("#cfg-fechar-ciclos").onclick = fecharCiclosVencidosForcado;
   $("#cfg-baixa").onchange = (e) => {
     setPodeBaixa(e.target.checked);
@@ -2131,6 +2185,14 @@ async function comecarDoZero(){
     $("#cfg-erro").textContent = "Senha incorreta.";
     $("#cfg-zerar").disabled = false; $("#cfg-zerar").textContent = "Começar do zero"; return;
   }
+  $("#cfg-zerar").textContent = "Salvando backup…";
+  // 🛟 backup de segurança ANTES de apagar (a tabela backups não é apagada)
+  try {
+    const total = MAPA_BK.reduce((s,[k]) => s + (Array.isArray(state[k]) ? state[k].length : 0), 0);
+    const dados = {}; MAPA_BK.forEach(([k]) => { dados[k] = state[k] || []; });
+    dados.config = state.config || {};
+    await sb.from("backups").insert({ id: uid(), familia_id: familiaId, data: hoje(), registros: total, dados });
+  } catch(e){}
   $("#cfg-zerar").textContent = "Apagando…";
   const tabelas = ["recebimentos_leite","cheques","vendas","lotes","insumos","leite_faixas","fornecedores","fornecedores_insumo","tipos_queijo","queijaria_config","receita_insumos"];
   const erros = [];
