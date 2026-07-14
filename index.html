@@ -551,7 +551,7 @@ body.leitura.libera-baixa #btn-config{ display:inline-flex !important }
    ======================================================================= */
 const SUPABASE_URL      = "https://cadnmgaymgljmoadebkk.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uBKKvD_e5ef4326TvkFgcg_rRnjmTus";
-const APP_VER = "v113";
+const APP_VER = "v114";
 const SPLASH_MIN = 2400;
 const EMAIL_ADMIN = "jpferreira1356@icloud.com";
 const splashT0 = Date.now();                              // suba junto com o cache do sw.js
@@ -2336,13 +2336,21 @@ function renderRecebimento(){
 
 function vencimentoDe(r){
   const f = state.fornecedores.find(x=>x.id===r.fornecedor_id);
-  return addDias(r.data, f ? (Number(f.prazo_pagamento)||30) : 30);
+  const prazo = f ? (Number(f.prazo_pagamento)||30) : 30;
+  // fim do CICLO a que a entrega pertence (mesma conta do detalhe do fornecedor)
+  const recsF = state.recebimentos.filter(x => x.fornecedor_id === r.fornecedor_id);
+  if(recsF.length){
+    const ancora = recsF.map(x=>x.data).sort()[0];
+    const c = Math.max(0, Math.floor(diasEntre(ancora, r.data) / prazo));
+    return addDias(ancora, (c+1)*prazo - 1);
+  }
+  return addDias(r.data, prazo);
 }
 
 function estaFechado(r){ return r.ciclo_fechado === true; }
 function autoFecharCiclos(){
   const hj = hoje();
-  const paraFechar = state.recebimentos.filter(r => !r.pago && r.ciclo_fechado !== true && r.ciclo_fechado !== false && vencimentoDe(r) <= hj);
+  const paraFechar = state.recebimentos.filter(r => !r.pago && r.ciclo_fechado !== true && r.ciclo_fechado !== false && vencimentoDe(r) < hj);
   if(!paraFechar.length) return;
   paraFechar.forEach(r => r.ciclo_fechado = true);
   const ids = paraFechar.map(r=>r.id);
@@ -2395,7 +2403,7 @@ function renderLeiteAPagar(corpo){
   const recs = state.recebimentos.filter(r => !r.pago);
   const doMes = state.recebimentos.filter(r => (r.data||"").slice(0,7) === mesAtual());
   const litrosMes = doMes.reduce((s,r)=> s + (Number(r.litros)||0), 0);
-  const vencidos = recs.filter(r => diffDias(vencimentoDe(r)) <= 0);
+  const vencidos = recs.filter(r => diffDias(vencimentoDe(r)) < 0);
   const valorVencido = vencidos.reduce((s,r)=> s + (Number(r.valor_total)||0), 0);
 
   // agrupar por fornecedor (soma todas as entregas pendentes)
