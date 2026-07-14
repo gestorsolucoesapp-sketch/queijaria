@@ -340,6 +340,9 @@ body.leitura.libera-baixa #btn-config{ display:inline-flex !important }
   border-radius:10px;font-size:1.25rem;font-weight:800;font-family:inherit;cursor:pointer;line-height:1}
 .calc-op:active{background:var(--ouro);color:#fff;border-color:var(--ouro)}
 .calc-eq{background:var(--ouro);color:#fff;border-color:var(--ouro)}
+.pg-parc{border:1px solid var(--linha-forte);border-radius:12px;padding:10px 12px;margin-bottom:8px;background:var(--card)}
+.pg-parc-cab{display:flex;justify-content:space-between;align-items:center;font-size:.8rem;color:var(--ouro-esc);margin-bottom:6px}
+.pg-parc-x{border:none;background:none;color:var(--vermelho);font-size:.76rem;font-weight:700;font-family:inherit;cursor:pointer;padding:0}
 .pg-sug-lbl{font-size:.76rem;color:var(--tinta-mole);margin-top:7px}
 .pg-per{display:flex;align-items:center;gap:6px;font-size:.78rem;color:var(--ouro-esc);font-weight:700;margin-bottom:8px}
 .pg-per input{width:52px;border:1px solid var(--ouro);border-radius:8px;padding:5px 6px;font-family:'IBM Plex Mono',monospace;font-size:.82rem;text-align:center;background:var(--card);color:var(--tinta)}
@@ -551,7 +554,7 @@ body.leitura.libera-baixa #btn-config{ display:inline-flex !important }
    ======================================================================= */
 const SUPABASE_URL      = "https://cadnmgaymgljmoadebkk.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uBKKvD_e5ef4326TvkFgcg_rRnjmTus";
-const APP_VER = "v114";
+const APP_VER = "v115";
 const SPLASH_MIN = 2400;
 const EMAIL_ADMIN = "jpferreira1356@icloud.com";
 const splashT0 = Date.now();                              // suba junto com o cache do sw.js
@@ -2642,24 +2645,74 @@ function pagarComEscolha(ids){
       <button class="seg-pag ativo" data-forma="cheque">📝 Cheque</button>
     </div>
     <div id="pg-cheque">
-      <div class="linha-campos">
-        <div class="campo"><label>Nº do cheque</label><input id="pg-num" inputmode="numeric" placeholder="opcional"></div>
-        <div class="campo"><label>Data de cair</label><input id="pg-venc" type="date" value="${sug.data}"></div>
-      </div>
+      <div id="pg-parcelas"></div>
+      <button type="button" class="btn btn-fantasma" id="pg-add" style="margin:4px 0 8px;padding:9px">＋ Dividir em outro cheque</button>
+      <div id="pg-resto" class="pg-sug-lbl" style="margin-bottom:8px"></div>
       <div id="pg-sug" class="pg-sug"></div>
-      <p class="dica" style="margin-top:6px">O cheque de <b>${brl(liquido)}</b> vai cair no controle de cheques.</p>
     </div>
     <div class="erro" id="pg-erro"></div>
     <button class="btn btn-primario" id="pg-ok" style="background:var(--verde)">Confirmar pagamento</button>`);
   let forma = "cheque";
+  let parcelas = [{ valor: liquido, data: sug.data, numero: "" }];
   $$(".seg-pag").forEach(b => b.onclick = () => {
     forma = b.dataset.forma;
     $$(".seg-pag").forEach(x => x.classList.toggle("ativo", x===b));
     $("#pg-cheque").style.display = forma==="cheque" ? "" : "none";
   });
+  const somaParc = () => parcelas.reduce((s,p)=> s+(Number(p.valor)||0), 0);
+  const pintarParcelas = () => {
+    $("#pg-parcelas").innerHTML = parcelas.map((p,i)=>`
+      <div class="pg-parc">
+        <div class="pg-parc-cab"><b>Cheque ${i+1}${parcelas.length>1?` de ${parcelas.length}`:""}</b>${parcelas.length>1?`<button type="button" class="pg-parc-x" data-rm="${i}">remover</button>`:""}</div>
+        <div class="linha-campos">
+          <div class="campo"><label>Valor (R$)</label><input data-pv="${i}" type="text" inputmode="decimal" value="${p.valor ? String(p.valor).replace(".",",") : ""}"></div>
+          <div class="campo"><label>Data de cair</label><input data-pd="${i}" type="date" value="${p.data}"></div>
+        </div>
+        <div class="campo"><label>Nº do cheque</label><input data-pn="${i}" inputmode="numeric" value="${esc(p.numero||"")}" placeholder="opcional"></div>
+      </div>`).join("");
+    const dif = Math.round((liquido - somaParc())*100)/100;
+    $("#pg-resto").innerHTML = parcelas.length>1
+      ? (Math.abs(dif)<0.005
+          ? `✅ Soma dos cheques = <b>${brl(liquido)}</b>`
+          : `<span style="color:var(--vermelho)">⚠️ ${dif>0?`Faltam <b>${brl(dif)}</b>`:`Passou <b>${brl(-dif)}</b>`} — soma ${brl(somaParc())} de ${brl(liquido)}</span>`)
+      : "";
+    $$("[data-pv]").forEach(el => el.oninput = () => { parcelas[+el.dataset.pv].valor = calcExpr(el.value)||0; atualizaResto(); });
+    $$("[data-pd]").forEach(el => el.onchange = () => { parcelas[+el.dataset.pd].data = el.value; pintarSug(); });
+    $$("[data-pn]").forEach(el => el.oninput = () => { parcelas[+el.dataset.pn].numero = el.value.trim(); });
+    $$("[data-rm]").forEach(b => b.onclick = () => {
+      const i = +b.dataset.rm;
+      const sobra = Number(parcelas[i].valor)||0;
+      parcelas.splice(i,1);
+      parcelas[0].valor = Math.round((Number(parcelas[0].valor||0)+sobra)*100)/100;  // devolve pro 1º
+      pintarParcelas(); pintarSug();
+    });
+  };
+  const atualizaResto = () => {
+    const dif = Math.round((liquido - somaParc())*100)/100;
+    $("#pg-resto").innerHTML = parcelas.length>1
+      ? (Math.abs(dif)<0.005
+          ? `✅ Soma dos cheques = <b>${brl(liquido)}</b>`
+          : `<span style="color:var(--vermelho)">⚠️ ${dif>0?`Faltam <b>${brl(dif)}</b>`:`Passou <b>${brl(-dif)}</b>`} — soma ${brl(somaParc())} de ${brl(liquido)}</span>`)
+      : "";
+  };
+  $("#pg-add").onclick = () => {
+    const dif = Math.max(0, Math.round((liquido - somaParc())*100)/100);
+    const s = sugerirDiaCheque();
+    // se não sobra nada, divide o último ao meio
+    if(dif <= 0 && parcelas.length){
+      const u = parcelas[parcelas.length-1];
+      const metade = Math.round((Number(u.valor)||0)/2*100)/100;
+      u.valor = Math.round(((Number(u.valor)||0)-metade)*100)/100;
+      parcelas.push({ valor: metade, data: s.data, numero: "" });
+    } else {
+      parcelas.push({ valor: dif, data: s.data, numero: "" });
+    }
+    pintarParcelas(); pintarSug();
+  };
+  pintarParcelas();
   const pintarSug = () => {
     const s = sugerirDiaCheque();
-    let d = $("#pg-venc").value || s.data;
+    let d = (parcelas[parcelas.length-1] && parcelas[parcelas.length-1].data) || s.data;
     const carga = cargaDoDia(d);
     const dias = diffDias(d);
     const mesmoForn = chequesFornDia(nome, d);
@@ -2696,28 +2749,39 @@ function pagarComEscolha(ids){
       <div class="pg-sug-lbl">Escolhido: <b>${dataBR(d)}</b> · ${dias} dias · ${carga>0?`já tem ${brl(carga)} caindo`:"nenhum cheque nesse dia"}</div>
       ${alerta}
       ${listaForn}`;
-    $$("[data-sug]").forEach(b => b.onclick = () => { $("#pg-venc").value = b.dataset.sug; pintarSug(); });
+    $$("[data-sug]").forEach(b => b.onclick = () => {
+      if(parcelas.length){ parcelas[parcelas.length-1].data = b.dataset.sug; }
+      pintarParcelas(); pintarSug();
+    });
     const aplicaJanela = () => {
       const de = Math.max(0, parseInt($("#pg-de").value)||0);
       const ate = Math.max(de, parseInt($("#pg-ate").value)||de);
       chqJanela = { de, ate }; salvarJanela();
       const nova = sugerirDiaCheque();
-      $("#pg-venc").value = nova.data;   // reposiciona no melhor dia da nova janela
-      pintarSug();
+      if(parcelas.length){ parcelas[parcelas.length-1].data = nova.data; }  // reposiciona no melhor dia
+      pintarParcelas(); pintarSug();
     };
     $("#pg-de").onchange = aplicaJanela;
     $("#pg-ate").onchange = aplicaJanela;
   };
-  $("#pg-venc").onchange = pintarSug;
   pintarSug();
   $("#pg-ok").onclick = () => {
-    let cheque = null;
+    let cheques = null;
     if(forma === "cheque"){
-      cheque = { para:nome, valor:liquido, numero:($("#pg-num").value.trim()||null),
-                 prazo_dias:0, data:($("#pg-venc").value||sug.data) };
+      const validas = parcelas.filter(p => (Number(p.valor)||0) > 0 && p.data);
+      if(!validas.length){ $("#pg-erro").textContent = "Informe valor e data do cheque."; return; }
+      const dif = Math.round((liquido - validas.reduce((s,p)=>s+(Number(p.valor)||0),0))*100)/100;
+      if(Math.abs(dif) > 0.005){
+        $("#pg-erro").textContent = dif > 0
+          ? `A soma dos cheques está ${brl(dif)} abaixo do total (${brl(liquido)}).`
+          : `A soma dos cheques passou ${brl(-dif)} do total (${brl(liquido)}).`;
+        return;
+      }
+      cheques = validas.map(p => ({ para:nome, valor:Math.round((Number(p.valor)||0)*100)/100,
+        numero:(p.numero||null), prazo_dias:0, data:p.data }));
     }
     fecharModal();
-    marcarPagoGrupo(ids, cheque);
+    marcarPagoGrupo(ids, cheques);
   };
 }
 // janela (em dias) usada pra sugerir o melhor dia do cheque
@@ -2772,18 +2836,20 @@ async function marcarPagoGrupo(ids, cheque){
     descUsar.forEach(d => { d.usado = true; d.usado_em = emPg; });
     dbw("descontos").update({ usado:true, usado_em:emPg }).in("id", descUsar.map(d=>d.id)).then(()=>{}, ()=>{});
   }
-  // se pagou com cheque, lança no controle de cheques
-  if(cheque && cheque.valor > 0){
-    const novoChq = { id:uid(), familia_id:familiaId, compensado:false, compensado_em:null,
-      para:cheque.para, valor:cheque.valor, numero:cheque.numero, data:cheque.data, prazo_dias:cheque.prazo_dias };
-    state.cheques.unshift(novoChq);
-    dbw("cheques").insert(novoChq).then(()=>{}, ()=>{});
+  // se pagou com cheque(s), lança no controle de cheques
+  const listaChq = Array.isArray(cheque) ? cheque : (cheque ? [cheque] : []);
+  const novos = listaChq.filter(c => c.valor > 0).map(c => ({
+    id:uid(), familia_id:familiaId, compensado:false, compensado_em:null,
+    para:c.para, valor:c.valor, numero:c.numero, data:c.data, prazo_dias:c.prazo_dias }));
+  if(novos.length){
+    novos.forEach(n => state.cheques.unshift(n));
+    dbw("cheques").insert(novos).then(()=>{}, ()=>{});
   }
   const bak = alvo.map(r => ({ id:r.id, pago:r.pago, pago_em:r.pago_em }));
   const em = hoje();
   alvo.forEach(r => { r.pago = true; r.pago_em = em; });
   renderRecebimento();
-  toast(cheque ? "Pago com cheque — lançado no controle. 📝" : (alvo.length === 1 ? "Pago. Foi pro histórico." : `${alvo.length} entregas pagas.`));
+  toast(novos.length ? (novos.length===1 ? "Pago com cheque — lançado no controle. 📝" : `Pago com ${novos.length} cheques — lançados no controle. 📝`) : (alvo.length === 1 ? "Pago. Foi pro histórico." : `${alvo.length} entregas pagas.`));
   const { error } = await dbw("recebimentos_leite").update({ pago:true, pago_em:em }).in("id", ids);
   if(error){
     bak.forEach(b => { const r = state.recebimentos.find(x=>x.id===b.id); if(r){ r.pago=b.pago; r.pago_em=b.pago_em; } });
