@@ -551,7 +551,7 @@ body.leitura.libera-baixa #btn-config{ display:inline-flex !important }
    ======================================================================= */
 const SUPABASE_URL      = "https://cadnmgaymgljmoadebkk.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uBKKvD_e5ef4326TvkFgcg_rRnjmTus";
-const APP_VER = "v111";
+const APP_VER = "v112";
 const SPLASH_MIN = 2400;
 const EMAIL_ADMIN = "jpferreira1356@icloud.com";
 const splashT0 = Date.now();                              // suba junto com o cache do sw.js
@@ -2417,9 +2417,13 @@ function renderLeiteAPagar(corpo){
 
   html += `<div class="rotulo">A pagar</div>`;
 
-  // ordenar: o último que teve lançamento fica em cima
+  // ordenar: ciclos fechados PRIMEIRO (fixos, por vencimento); depois pelo último lançamento
   const chaves = Object.keys(grupos).sort((a,b)=>{
-    const u = String(grupos[b].ult||"").localeCompare(String(grupos[a].ult||""));
+    const fa = grupos[a].itens.some(estaFechado) ? 0 : 1;
+    const fb = grupos[b].itens.some(estaFechado) ? 0 : 1;
+    if(fa !== fb) return fa - fb;
+    if(fa === 0) return grupos[a].venc.localeCompare(grupos[b].venc);  // entre fechados: ordem fixa por vencimento
+    const u = String(grupos[b].ult||"").localeCompare(String(grupos[a].ult||""));  // entre abertos: último lançado em cima
     if(u !== 0) return u;
     return grupos[a].venc.localeCompare(grupos[b].venc);
   });
