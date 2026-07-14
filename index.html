@@ -80,9 +80,11 @@ input,select{font-family:inherit;font-size:16px}
 
 /* resumo */
 .resumo{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
-.stat{background:var(--card);border:1px solid var(--linha);border-radius:14px;padding:13px 12px}
-.stat .n{font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:23px;line-height:1;letter-spacing:-.02em}
-.stat .l{font-size:11px;color:var(--tinta-mole);margin-top:6px;line-height:1.25}
+.stat{background:var(--card);border:1px solid var(--linha);border-radius:14px;padding:13px 12px;text-align:center}
+.stat .n{font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:26px;line-height:1;letter-spacing:-.02em}
+.stat .l{font-size:12px;color:var(--tinta-mole);margin-top:6px;line-height:1.25}
+#btn-ia{display:none !important}
+#btn-agenda svg{width:27px;height:27px}
 .stat.g .n{color:var(--ouro-esc)} .stat.v .n{color:var(--verde)} .stat.a .n{color:var(--azul)}
 
 /* card herói: próximo a ficar pronto */
@@ -354,6 +356,8 @@ body.leitura.libera-baixa #btn-config{ display:inline-flex !important }
 .ag-cel.fer{color:var(--vermelho);font-weight:800;border-color:var(--vermelho)}
 .ag-cel.hj{background:#fff6e6;border-color:var(--ouro)}
 .ag-cel.sel{background:var(--ouro);color:#fff;border-color:var(--ouro)}
+.ag-cel.tem{border:2.5px solid var(--vermelho);font-weight:800}
+.ag-cel.sel.tem{background:var(--vermelho);border-color:var(--vermelho);color:#fff}
 .ag-ponto{position:absolute;bottom:4px;width:5px;height:5px;border-radius:50%;background:var(--azul)}
 .ag-cel.sel .ag-ponto{background:#fff}
 .ag-add{display:flex;gap:6px;margin-bottom:8px}
@@ -579,7 +583,7 @@ body.leitura.libera-baixa #btn-config{ display:inline-flex !important }
    ======================================================================= */
 const SUPABASE_URL      = "https://cadnmgaymgljmoadebkk.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uBKKvD_e5ef4326TvkFgcg_rRnjmTus";
-const APP_VER = "v117";
+const APP_VER = "v118";
 const SPLASH_MIN = 2400;
 const EMAIL_ADMIN = "jpferreira1356@icloud.com";
 const splashT0 = Date.now();                              // suba junto com o cache do sw.js
@@ -1444,8 +1448,8 @@ function abrirAgenda(){
   for(let d=1; d<=nDias; d++){
     const iso = `${ano}-${String(mes).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
     const ehFer = fer[iso], ehHoje = iso === hoje(), sel = iso === agDia;
-    cels += `<div class="ag-cel ${ehFer?"fer":""} ${ehHoje?"hj":""} ${sel?"sel":""}" data-agd="${iso}">
-      ${d}${temTarefa[iso]?`<span class="ag-ponto"></span>`:""}
+    cels += `<div class="ag-cel ${ehFer?"fer":""} ${ehHoje?"hj":""} ${sel?"sel":""} ${temTarefa[iso]?"tem":""}" data-agd="${iso}">
+      ${d}
     </div>`;
   }
   const nomeMes = prim.toLocaleDateString("pt-BR", { month:"long", year:"numeric" });
@@ -1480,7 +1484,10 @@ function abrirAgenda(){
   $("#ag-fechar").onclick = fecharModal;
   $("#ag-ant").onclick = () => { const d = new Date(ano, mes-2, 1); agMes = fmtLocal(d).slice(0,7); abrirAgenda(); };
   $("#ag-prox").onclick = () => { const d = new Date(ano, mes, 1); agMes = fmtLocal(d).slice(0,7); abrirAgenda(); };
-  $$("[data-agd]").forEach(c => c.onclick = () => { agDia = c.dataset.agd; abrirAgenda(); });
+  $$("[data-agd]").forEach(c => c.onclick = () => {
+    agDia = c.dataset.agd; abrirAgenda();
+    setTimeout(() => { const l = $("#ag-lista"); if(l) l.scrollIntoView({ behavior:"smooth", block:"center" }); }, 80);
+  });
   const add = () => {
     const txt = $("#ag-novo").value.trim();
     if(!txt) return;
@@ -1772,6 +1779,23 @@ function renderInicio(){
     </div>`;
   }
 
+  // 📅 afazeres de hoje e atrasados
+  const tarefasIni = (Array.isArray(state.config && state.config.agenda) ? state.config.agenda : [])
+    .filter(t => !t.feito && t.data && t.data <= hoje())
+    .sort((a,b)=> String(a.data).localeCompare(String(b.data)));
+  if(tarefasIni.length){
+    const atras = tarefasIni.filter(t=>t.data < hoje()).length;
+    html += `<div class="alerta-ciclo" id="alerta-agenda" style="background:#fff6e6;border-color:var(--ouro)">
+      <div class="ac-tit" style="color:var(--ouro-esc)">📅 ${tarefasIni.length===1?"1 afazer":tarefasIni.length+" afazeres"} pra hoje${atras?` <span style="color:var(--vermelho)">(${atras} atrasado${atras>1?"s":""})</span>`:""}</div>
+      ${tarefasIni.slice(0,4).map(t=>`
+        <div class="ag-tar" style="margin:6px 0 0;padding:8px 10px" onclick="event.stopPropagation()">
+          <button class="ag-check" data-aghome="${t.id}"></button>
+          <span class="ag-txt" style="font-size:.86rem">${esc(t.texto)}${t.data<hoje()?` <span style="color:var(--vermelho);font-size:.74rem">· ${dataBR(t.data)}</span>`:""}</span>
+        </div>`).join("")}
+      ${tarefasIni.length>4?`<div class="ac-sub" style="margin-top:6px">e mais ${tarefasIni.length-4} — toque pra abrir a agenda</div>`:`<div class="ac-sub" style="margin-top:6px">toque pra abrir a agenda</div>`}
+    </div>`;
+  }
+
   if(proximo){
     const { l, c } = proximo;
     html += `
@@ -1813,6 +1837,13 @@ function renderInicio(){
   if(ac) ac.onclick = () => { leiteAba = "apagar"; irPara("leite"); };
   const ap = $("#alerta-proximo");
   if(ap) ap.onclick = abrirTodosCiclos;
+  const ag = $("#alerta-agenda");
+  if(ag) ag.onclick = () => { agDia = hoje(); agMes = hoje().slice(0,7); abrirAgenda(); };
+  $$("[data-aghome]").forEach(b => b.onclick = (e) => {
+    e.stopPropagation();
+    const t = agTarefas().find(x=>x.id===b.dataset.aghome);
+    if(t){ t.feito = true; agSalvar(); renderInicio(); toast("Feito! ✅"); }
+  });
 }
 let proxCiclosCache = [];
 function abrirTodosCiclos(){
