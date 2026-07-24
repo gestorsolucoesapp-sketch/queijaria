@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no, interactive-widget=resizes-content">
 <meta name="theme-color" content="#F5F2E9">
 <title>Queijaria Bene</title>
 <link rel="manifest" href="manifest.json">
@@ -150,7 +150,8 @@ body.leitura .fab-ia{display:none !important}
 .nav{position:fixed;bottom:0;left:0;right:0;z-index:30;background:rgba(255,253,248,.92);
   backdrop-filter:blur(12px);border-top:1px solid var(--linha);
   display:flex;padding:8px 6px calc(8px + env(safe-area-inset-bottom))}
-/* modo leve: celular fraco — mata efeitos pesados */
+body.teclado .nav{display:none !important}
+body.teclado .fab,body.teclado .fab-ia{display:none !important}
 body.leve *{animation:none !important;transition:none !important}
 body.leve .nav,body.leve .overlay{backdrop-filter:none !important}
 body.leve .nav{background:var(--card)}
@@ -589,7 +590,7 @@ body.leitura.libera-baixa #btn-config{ display:inline-flex !important }
    ======================================================================= */
 const SUPABASE_URL      = "https://cadnmgaymgljmoadebkk.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uBKKvD_e5ef4326TvkFgcg_rRnjmTus";
-const APP_VER = "v123";
+const APP_VER = "v124";
 const SPLASH_MIN = 700;
 const EMAIL_ADMIN = "jpferreira1356@icloud.com";
 const splashT0 = Date.now();                              // suba junto com o cache do sw.js
@@ -611,6 +612,21 @@ try {
   else modoLeve = (navigator.deviceMemory && navigator.deviceMemory <= 4) || false;  // auto
 } catch(e){}
 function aplicarLeve(){ document.body.classList.toggle("leve", modoLeve); }
+// esconde a barra de baixo quando o teclado abre (evita ela flutuar/travar no Android)
+document.addEventListener("focusin", (e) => {
+  if(e.target && e.target.matches && e.target.matches("input, textarea, select")) document.body.classList.add("teclado");
+});
+document.addEventListener("focusout", () => { setTimeout(() => {
+  const a = document.activeElement;
+  if(!a || !(a.matches && a.matches("input, textarea, select"))) document.body.classList.remove("teclado");
+}, 60); });
+if(window.visualViewport){
+  const vv = window.visualViewport;
+  vv.addEventListener("resize", () => {
+    // se a área visível encolheu bastante, é o teclado
+    document.body.classList.toggle("teclado", vv.height < window.innerHeight * 0.75);
+  });
+}
 try { if(modoLeve && document.body) document.body.classList.add("leve"); } catch(e){}   // aplica já, antes de renderizar
 function setModoLeve(v){
   modoLeve = !!v;
