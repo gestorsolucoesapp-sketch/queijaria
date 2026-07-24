@@ -594,7 +594,7 @@ body.leitura.libera-baixa #btn-config{ display:inline-flex !important }
    ======================================================================= */
 const SUPABASE_URL      = "https://cadnmgaymgljmoadebkk.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uBKKvD_e5ef4326TvkFgcg_rRnjmTus";
-const APP_VER = "v128";
+const APP_VER = "v129";
 const SPLASH_MIN = 700;
 const EMAIL_ADMIN = "jpferreira1356@icloud.com";
 const splashT0 = Date.now();                              // suba junto com o cache do sw.js
@@ -1386,7 +1386,7 @@ async function processarFila(){
   }
   _processando = false;
   atualizarIndicadorFila();
-  if(!outboxLer().length && navigator.onLine){ try { await carregarTudo(); irPara(paginaAtual()); } catch(e){} }
+  if(!outboxLer().length && navigator.onLine){ try { const y = window.scrollY; await carregarTudo(); irPara(paginaAtual()); if(y>0) requestAnimationFrame(()=>window.scrollTo(0,y)); } catch(e){} }
 }
 function atualizarIndicadorFila(){
   const el = document.getElementById("fila-badge"); if(!el) return;
@@ -1719,13 +1719,34 @@ function iniciarRealtime(){
   window.addEventListener("online", agendarSync);
   document.addEventListener("visibilitychange", () => { if(!document.hidden) agendarSync(); });
 }
+let _redesenhos = 0, _appT0 = Date.now();
+/* impressão digital barata do estado: só re-renderiza se algo REALMENTE mudou */
+function _assinaturaEstado(){
+  const soma = (arr, f) => (arr||[]).reduce((a,x)=> a + (f(x)||0), 0);
+  return [
+    (state.recebimentos||[]).length, (state.vendas||[]).length, (state.cheques||[]).length,
+    (state.lotes||[]).length, (state.tipos||[]).length, (state.fornecedores||[]).length,
+    (state.insumos||[]).length, (state.descontos||[]).length,
+    soma(state.cheques, c => (c.compensado?1:0) + (Number(c.valor)||0)),
+    soma(state.recebimentos, r => (r.pago?1:0) + (Number(r.valor_total)||0)),
+    soma(state.vendas, v => Number(v.valor_total)||0),
+    JSON.stringify(state.config||{}).length
+  ].join("|");
+}
+
 function agendarSync(){
   clearTimeout(realtimeTimer);
   realtimeTimer = setTimeout(async () => {
     if(document.querySelector(".overlay")) return; // não recarrega com um modal aberto
     if(document.hidden) return;                    // app em segundo plano: espera voltar
     if(document.activeElement && /INPUT|TEXTAREA/.test(document.activeElement.tagName)) return; // digitando
+
+    const antes = _assinaturaEstado();
     await carregarTudo();
+    if(_assinaturaEstado() === antes) return;      // nada mudou → NÃO redesenha (senão o scroll volta pro topo)
+
+    _redesenhos++;
+    const y = window.scrollY;                      // guarda onde a pessoa estava
     aplicarLeitura(); aplicarAbas();
     const p = paginaAtual();
     if(p === "inicio") renderInicio();
@@ -1734,6 +1755,7 @@ function agendarSync(){
     else if(p === "vendas") renderVendas();
     else if(p === "cheques") renderCheques($("#view-cheques"));
     else if(p === "cadastro") renderCadastro();
+    if(y > 0) requestAnimationFrame(() => window.scrollTo(0, y));   // devolve a posição
   }, 2500);
 }
 $$(".nav a").forEach(a => a.onclick = () => {
@@ -2092,7 +2114,8 @@ function abrirModalConfig(){
   let _diag = "";
   try {
     const kb = Math.round((localStorage.getItem(ESTADO_KEY)||"").length/1024);
-    _diag = `${kb} KB neste aparelho · ${state.cheques.length} cheques · ${state.recebimentos.length} recebimentos · ${state.vendas.length} vendas · ${state.lotes.length} lotes`;
+    const mins = Math.max(1, Math.round((Date.now()-_appT0)/60000));
+    _diag = `${kb} KB · ${state.cheques.length} cheques · ${state.recebimentos.length} recebimentos · ${state.vendas.length} vendas · ${state.lotes.length} lotes<br>🔄 <b>${_redesenhos} redesenhos</b> em ${mins} min · tela ${window.innerWidth}x${window.innerHeight} · rolagem ${document.documentElement.scrollHeight}px`;
   } catch(e){ _diag = "não foi possível medir"; }
   const secaoAparelho = `
     <div class="rotulo" style="margin-top:4px">Este aparelho</div>
