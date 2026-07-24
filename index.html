@@ -592,7 +592,7 @@ body.leitura.libera-baixa #btn-config{ display:inline-flex !important }
    ======================================================================= */
 const SUPABASE_URL      = "https://cadnmgaymgljmoadebkk.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uBKKvD_e5ef4326TvkFgcg_rRnjmTus";
-const APP_VER = "v125";
+const APP_VER = "v126";
 const SPLASH_MIN = 700;
 const EMAIL_ADMIN = "jpferreira1356@icloud.com";
 const splashT0 = Date.now();                              // suba junto com o cache do sw.js
@@ -3644,6 +3644,8 @@ function graficoCheques(pend){
   pend.forEach(c => { const d = bomParaDe(c); porDia[d] = (porDia[d]||0) + (Number(c.valor)||0); });
   const dias = Object.keys(porDia).sort();
   if(!dias.length) return "";
+  const diasTotal = dias.length;
+  if(dias.length > 45) dias.length = 45;   // teto: SVG gigante travava o celular
   const H=150, PAD=10, GAP=12, BW=34;     // meio-termo: cabe mais dias
   const n = dias.length;
   const W = PAD*2 + n*BW + (n-1)*GAP;      // largura cresce com os dias (scroll)
@@ -3665,7 +3667,7 @@ function graficoCheques(pend){
   out += `<rect x="${PAD}" y="${(yM-14).toFixed(1)}" width="${(String(Math.round(media)).length*6+42)}" height="13" rx="3" fill="var(--azul)"/>`;
   out += `<text x="${PAD+5}" y="${(yM-4).toFixed(1)}" font-size="9" fill="#fff" font-family="'IBM Plex Mono',monospace">média ${Math.round(media)}</text>`;
   return `<div class="graf-scroll"><svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" style="display:block;max-width:none">${out}</svg></div>
-    ${n>6?`<div class="graf-dica-scroll">← arraste pro lado pra ver todos os dias →</div>`:""}`;
+    ${diasTotal>45?`<div class="graf-dica-scroll">← arraste pro lado · mostrando os ${n} primeiros de ${diasTotal} dias →</div>`:(n>6?`<div class="graf-dica-scroll">← arraste pro lado pra ver todos os dias →</div>`:"")}`;
 }
 
 function abrirChequesDoDia(d){
@@ -3692,6 +3694,10 @@ function parseValorBusca(q){
   const n = parseFloat(limpo);
   return isNaN(n) ? null : n;
 }
+
+/* lista longa: pinta por lotes, 1 listener só, busca com respiro */
+const CHQ_LOTE = 30;
+let chqObs = null, chqMostrados = 0;
 
 function renderCheques(corpo){
   const pend = state.cheques.filter(c => !c.compensado);
@@ -3723,27 +3729,23 @@ function renderCheques(corpo){
     </div>`;
   };
 
-  const bindCards = (cont) => {
-    cont.querySelectorAll("[data-cheque]").forEach(el => el.onclick = (e) => { if(e.target.closest("[data-baixa]")) return; abrirModalCheque(el.dataset.cheque); });
-    cont.querySelectorAll("[data-baixa]").forEach(b => b.onclick = (e) => { e.stopPropagation(); alternarBaixaCheque(b.dataset.baixa); });
-    cont.querySelectorAll("[data-gdia]").forEach(r => r.onclick = () => abrirChequesDoDia(r.dataset.gdia));
-    cont.querySelectorAll("[data-compensar]").forEach(b => b.onclick = (e) => { e.stopPropagation(); marcarCompensado(b.dataset.compensar); });
-  };
-
-  const corpoPadrao = () => {
-    let h = `${pend.length ? `<div class="rotulo">Volume por dia — toque na barra pra ver quem recebe</div><div class="graf-card">${graficoCheques(pend)}</div>` : ""}
-    <div class="rotulo">Cheques pendentes</div>`;
-    h += pend.length
-      ? [...pend].sort((a,b)=> bomParaDe(a).localeCompare(bomParaDe(b))).map(cartao).join("")
-      : vazioCad("Toque no <b>+</b> pra registrar um cheque:<br>pra quem, valor, data e prazo.");
-    if(comp.length){
-      h += `<div class="rotulo" style="margin-top:16px">Compensados</div>`;
-      h += [...comp].sort((a,b)=> String(b.compensado_em||b.data).localeCompare(String(a.compensado_em||a.data))).map(cartao).join("");
+  /* fila plana: {rot} = rótulo/aviso, {c} = cartão de cheque */
+  const filaPadrao = () => {
+    const fila = [];
+    if(pend.length){
+      fila.push({ rot:`<div class="rotulo">Cheques pendentes</div>` });
+      [...pend].sort((a,b)=> bomParaDe(a).localeCompare(bomParaDe(b))).forEach(c => fila.push({ c }));
+    } else {
+      fila.push({ rot: vazioCad("Toque no <b>+</b> pra registrar um cheque:<br>pra quem, valor, data e prazo.") });
     }
-    return h;
+    if(comp.length){
+      fila.push({ rot:`<div class="rotulo" style="margin-top:16px">Compensados</div>` });
+      [...comp].sort((a,b)=> String(b.compensado_em||b.data).localeCompare(String(a.compensado_em||a.data))).forEach(c => fila.push({ c }));
+    }
+    return fila;
   };
 
-  const corpoBusca = (q) => {
+  const filaBusca = (q) => {
     const termo = q.trim();
     const qn = normTxt(termo);
     const valor = parseValorBusca(termo);
@@ -3760,19 +3762,19 @@ function renderCheques(corpo){
         .sort((a,b)=> bomParaDe(a).localeCompare(bomParaDe(b)))
         .map(c => ({ c, diff:null }));
     }
-    if(!itens.length) return vazioCad("Nenhum cheque encontrado.<br>Tente outro nome ou valor.");
+    if(!itens.length) return [{ rot: vazioCad("Nenhum cheque encontrado.<br>Tente outro nome ou valor.") }];
     const total = itens.reduce((s,o)=> s+(Number(o.c.valor)||0),0);
     const rot = soNumero ? `próximos de ${brl(valor)}` : `para “${esc(termo)}”`;
-    let h = `<div class="rotulo">${itens.length} resultado${itens.length>1?"s":""} ${rot} · ${brl(total)}</div>`;
-    h += itens.map(o => {
-      const extra = (o.diff !== null && o.diff > 0.005) ? `<div class="chq-diff">≈ ${brl(o.diff)} de diferença do valor buscado</div>` : "";
-      return cartao(o.c) + extra;
-    }).join("");
-    return h;
+    const fila = [{ rot:`<div class="rotulo">${itens.length} resultado${itens.length>1?"s":""} ${rot} · ${brl(total)}</div>` }];
+    itens.forEach(o => fila.push({
+      c: o.c,
+      extra: (o.diff !== null && o.diff > 0.005) ? `<div class="chq-diff">≈ ${brl(o.diff)} de diferença do valor buscado</div>` : ""
+    }));
+    return fila;
   };
 
   const lupa = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>`;
-  let html = `
+  corpo.innerHTML = `
     <div class="resumo">
       <div class="stat ${pend.some(c=>diffDias(bomParaDe(c))<=0)?"r":"g"}"><div class="n" style="font-size:1.05rem">${brl(totalPend)}</div><div class="l">em cheques pendentes</div></div>
       <div class="stat v"><div class="n" style="font-size:1.05rem">${brl(totalComp)}</div><div class="l">compensados</div></div>
@@ -3783,21 +3785,77 @@ function renderCheques(corpo){
       <button id="chq-x" class="chq-x" aria-label="Limpar busca">×</button>
     </div>
     <div id="chq-corpo"></div>`;
-  corpo.innerHTML = html;
 
   const cont = corpo.querySelector("#chq-corpo");
-  const inp = corpo.querySelector("#chq-q");
+  const inp  = corpo.querySelector("#chq-q");
   const btnX = corpo.querySelector("#chq-x");
-  const aplica = () => {
+
+  const grafHtml = pend.length
+    ? `<div class="rotulo">Volume por dia — toque na barra pra ver quem recebe</div><div class="graf-card">${graficoCheques(pend)}</div>`
+    : "";
+
+  let fila = [], pos = 0;
+
+  const pintarLote = (minimo) => {
+    const fim = cont.querySelector("#chq-fim");
+    if(!fim) return;
+    const alvo = Math.max(CHQ_LOTE, minimo || 0);
+    let h = "", n = 0;
+    while(pos < fila.length && n < alvo){
+      const it = fila[pos++];
+      if(it.rot) h += it.rot;
+      else { h += cartao(it.c) + (it.extra||""); n++; }
+    }
+    if(h) fim.insertAdjacentHTML("beforebegin", h);
+    chqMostrados += n;
+
+    let restam = 0;
+    for(let i = pos; i < fila.length; i++) if(!fila[i].rot) restam++;
+
+    if(chqObs){ chqObs.disconnect(); chqObs = null; }
+    if(restam){
+      fim.innerHTML = `<button class="btn btn-fantasma" id="chq-mais" style="margin-top:8px">Ver mais ${restam} cheque${restam>1?"s":""}</button>`;
+      fim.querySelector("#chq-mais").onclick = () => pintarLote(0);
+      if(typeof IntersectionObserver === "function"){
+        chqObs = new IntersectionObserver(es => {
+          if(es.some(e => e.isIntersecting)){ chqObs.disconnect(); chqObs = null; pintarLote(0); }
+        }, { rootMargin: "700px 0px" });
+        chqObs.observe(fim);
+      }
+    } else {
+      fim.innerHTML = "";
+    }
+  };
+
+  /* 1 listener só pro bloco inteiro, em vez de 1 por cartão */
+  cont.onclick = (e) => {
+    const bx = e.target.closest("[data-baixa]");
+    if(bx){ e.stopPropagation(); alternarBaixaCheque(bx.dataset.baixa); return; }
+    const cp = e.target.closest("[data-compensar]");
+    if(cp){ e.stopPropagation(); marcarCompensado(cp.dataset.compensar); return; }
+    const gd = e.target.closest("[data-gdia]");
+    if(gd){ abrirChequesDoDia(gd.dataset.gdia); return; }
+    const card = e.target.closest("[data-cheque]");
+    if(card) abrirModalCheque(card.dataset.cheque);
+  };
+
+  const aplica = (manterPosicao) => {
     const q = inp.value;
+    const buscando = !!q.trim();
+    const antes = manterPosicao ? chqMostrados : 0;
     chequeBuscaQ = q;
-    cont.innerHTML = q.trim() ? corpoBusca(q) : corpoPadrao();
-    bindCards(cont);
+    if(chqObs){ chqObs.disconnect(); chqObs = null; }
+    fila = buscando ? filaBusca(q) : filaPadrao();
+    pos = 0; chqMostrados = 0;
+    cont.innerHTML = (buscando ? "" : grafHtml) + `<div id="chq-fim"></div>`;
+    pintarLote(antes);
     btnX.style.display = q ? "grid" : "none";
   };
-  inp.oninput = aplica;
-  btnX.onclick = () => { inp.value = ""; chequeBuscaQ = ""; aplica(); inp.focus(); };
-  aplica();
+
+  let debBusca = null;
+  inp.oninput = () => { clearTimeout(debBusca); debBusca = setTimeout(() => aplica(false), 220); };
+  btnX.onclick = () => { clearTimeout(debBusca); inp.value = ""; chequeBuscaQ = ""; aplica(false); inp.focus(); };
+  aplica(true);
 }
 
 function abrirModalCheque(id){
