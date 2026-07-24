@@ -589,8 +589,8 @@ body.leitura.libera-baixa #btn-config{ display:inline-flex !important }
    ======================================================================= */
 const SUPABASE_URL      = "https://cadnmgaymgljmoadebkk.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uBKKvD_e5ef4326TvkFgcg_rRnjmTus";
-const APP_VER = "v122";
-const SPLASH_MIN = 2400;
+const APP_VER = "v123";
+const SPLASH_MIN = 700;
 const EMAIL_ADMIN = "jpferreira1356@icloud.com";
 const splashT0 = Date.now();                              // suba junto com o cache do sw.js
 
@@ -611,6 +611,7 @@ try {
   else modoLeve = (navigator.deviceMemory && navigator.deviceMemory <= 4) || false;  // auto
 } catch(e){}
 function aplicarLeve(){ document.body.classList.toggle("leve", modoLeve); }
+try { if(modoLeve && document.body) document.body.classList.add("leve"); } catch(e){}   // aplica já, antes de renderizar
 function setModoLeve(v){
   modoLeve = !!v;
   try { localStorage.setItem("modo_leve", v ? "1" : "0"); } catch(e){}
@@ -3327,6 +3328,7 @@ function renderLeiteGraficos(corpo){
 }
 
 function barrasSVG(valores, dias, cores){
+  if(modoLeve) return "";   // modo leve: sem gráfico pesado
   const W=320, H=110, PAD=4, GAP=3;
   const n = valores.length;
   const bw = (W - PAD*2 - GAP*(n-1)) / n;
@@ -3619,6 +3621,7 @@ function mensagemFornecedor(fid, itens, vencTxt){
 function bomParaDe(c){ return addDias(c.data, Number(c.prazo_dias)||0); }
 
 function graficoCheques(pend){
+  if(modoLeve) return "";   // modo leve: sem gráfico pesado
   const porDia = {};
   pend.forEach(c => { const d = bomParaDe(c); porDia[d] = (porDia[d]||0) + (Number(c.valor)||0); });
   const dias = Object.keys(porDia).sort();
