@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no, interactive-widget=resizes-content">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no, interactive-widget=overlays-content">
 <meta name="theme-color" content="#F5F2E9">
 <title>Queijaria Bene</title>
 <link rel="manifest" href="manifest.json">
@@ -594,7 +594,7 @@ body.leitura.libera-baixa #btn-config{ display:inline-flex !important }
    ======================================================================= */
 const SUPABASE_URL      = "https://cadnmgaymgljmoadebkk.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uBKKvD_e5ef4326TvkFgcg_rRnjmTus";
-const APP_VER = "v129";
+const APP_VER = "v130";
 const SPLASH_MIN = 700;
 const EMAIL_ADMIN = "jpferreira1356@icloud.com";
 const splashT0 = Date.now();                              // suba junto com o cache do sw.js
@@ -627,7 +627,10 @@ document.addEventListener("focusout", () => { setTimeout(() => {
 if(window.visualViewport){
   const vv = window.visualViewport;
   vv.addEventListener("resize", () => {
-    // se a área visível encolheu bastante, é o teclado
+    // no Android a barra de URL some/aparece durante o scroll e dispara isso o tempo todo.
+    // só é teclado de verdade se tiver um campo focado.
+    const a = document.activeElement;
+    if(!(a && a.matches && a.matches("input, textarea, select"))) return;
     document.body.classList.toggle("teclado", vv.height < window.innerHeight * 0.75);
   });
 }
