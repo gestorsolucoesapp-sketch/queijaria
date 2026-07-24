@@ -59,7 +59,7 @@ input,select{font-family:inherit;font-size:16px}
 .erro{color:var(--vermelho);font-size:13px;margin-top:4px;min-height:16px}
 
 /* ---------- App ---------- */
-#app{max-width:520px;margin:0 auto;min-height:100dvh;
+#app{max-width:520px;margin:0 auto;min-height:100vh;min-height:100svh;
   padding-bottom:calc(78px + env(safe-area-inset-bottom))}
 .topo{position:sticky;top:0;z-index:20;background:rgba(245,242,233,.86);
   backdrop-filter:blur(10px);border-bottom:1px solid var(--linha);
@@ -155,7 +155,9 @@ body.leitura .fab-ia{display:none !important}
 body.teclado .nav{display:none !important}
 body.teclado .fab,body.teclado .fab-ia{display:none !important}
 body.leve *{animation:none !important;transition:none !important}
-body.leve .nav,body.leve .overlay{backdrop-filter:none !important}
+body.leve .topo,body.leve .nav,body.leve .overlay{backdrop-filter:none !important;-webkit-backdrop-filter:none !important}
+body.leve .topo{background:var(--card)}
+body.leve .tipo,body.leve .painel,body.leve .graf-card{box-shadow:none !important}
 body.leve .nav{background:var(--card)}
 body.leve .graf-scroll,body.leve .graf-card{display:none !important}
 body.leve .heroi svg{display:none}
@@ -592,7 +594,7 @@ body.leitura.libera-baixa #btn-config{ display:inline-flex !important }
    ======================================================================= */
 const SUPABASE_URL      = "https://cadnmgaymgljmoadebkk.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uBKKvD_e5ef4326TvkFgcg_rRnjmTus";
-const APP_VER = "v127";
+const APP_VER = "v128";
 const SPLASH_MIN = 700;
 const EMAIL_ADMIN = "jpferreira1356@icloud.com";
 const splashT0 = Date.now();                              // suba junto com o cache do sw.js
