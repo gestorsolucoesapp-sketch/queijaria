@@ -583,7 +583,7 @@ body.leitura.libera-baixa #btn-config{ display:inline-flex !important }
    ======================================================================= */
 const SUPABASE_URL      = "https://cadnmgaymgljmoadebkk.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uBKKvD_e5ef4326TvkFgcg_rRnjmTus";
-const APP_VER = "v120";
+const APP_VER = "v121";
 const SPLASH_MIN = 2400;
 const EMAIL_ADMIN = "jpferreira1356@icloud.com";
 const splashT0 = Date.now();                              // suba junto com o cache do sw.js
@@ -3005,8 +3005,10 @@ function pagarComEscolha(ids){
       cheques = validas.map(p => ({ para:nome, valor:Math.round((Number(p.valor)||0)*100)/100,
         numero:(p.numero||null), prazo_dias:0, data:p.data }));
     }
-    fecharModal();
-    marcarPagoGrupo(ids, cheques);
+    const resumo = forma === "cheque"
+      ? `Confirmar pagamento de <b>${esc(nome)}</b> — <b>${brl(liquido)}</b> em ${cheques.length===1?"cheque":cheques.length+" cheques"}?`
+      : `Confirmar pagamento de <b>${esc(nome)}</b> — <b>${brl(liquido)}</b> em dinheiro/Pix?`;
+    confirmarComSenha(resumo, () => { fecharModal(); marcarPagoGrupo(ids, cheques); });
   };
 }
 // janela (em dias) usada pra sugerir o melhor dia do cheque
