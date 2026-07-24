@@ -592,7 +592,7 @@ body.leitura.libera-baixa #btn-config{ display:inline-flex !important }
    ======================================================================= */
 const SUPABASE_URL      = "https://cadnmgaymgljmoadebkk.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uBKKvD_e5ef4326TvkFgcg_rRnjmTus";
-const APP_VER = "v126";
+const APP_VER = "v127";
 const SPLASH_MIN = 700;
 const EMAIL_ADMIN = "jpferreira1356@icloud.com";
 const splashT0 = Date.now();                              // suba junto com o cache do sw.js
@@ -1394,11 +1394,24 @@ function atualizarIndicadorFila(){
 }
 window.addEventListener("online", () => { toast("Conexão voltou — enviando lançamentos…"); processarFila(); });
 window.addEventListener("offline", () => { toast("Sem internet — salvando no aparelho. 📴"); });
-setInterval(() => processarFila(), 20000);
+setInterval(() => processarFila(), 60000);
 
-function salvarCacheEstado(){ try { localStorage.setItem(ESTADO_KEY, JSON.stringify(state)); } catch(e){} }
+let _cacheTimer = null;
+function salvarCacheEstado(forcar){
+  const gravar = () => { try { localStorage.setItem(ESTADO_KEY, JSON.stringify(state)); } catch(e){} };
+  if(forcar){ clearTimeout(_cacheTimer); return gravar(); }
+  // JSON.stringify + localStorage é SÍNCRONO: fora da thread de render, e 1 vez só por rajada
+  clearTimeout(_cacheTimer);
+  _cacheTimer = setTimeout(() => {
+    if(typeof requestIdleCallback === "function") requestIdleCallback(gravar, { timeout:4000 });
+    else gravar();
+  }, 1500);
+}
+window.addEventListener("pagehide", () => salvarCacheEstado(true));
+document.addEventListener("visibilitychange", () => { if(document.hidden) salvarCacheEstado(true); });
 function carregarCacheEstado(){ try { const s = JSON.parse(localStorage.getItem(ESTADO_KEY)); if(s) Object.assign(state, s); } catch(e){} }
 
+let _protecaoFeita = false;
 async function carregarTudo(){
   if(!navigator.onLine){ carregarCacheEstado(); return; }
   const q = (p) => p.then(r => r.data || []).catch(() => []);
@@ -1421,7 +1434,11 @@ async function carregarTudo(){
   const doBanco = { tipos:t, lotes:l, fornecedores:f, leiteFaixas:lf, insumos:ins, fornInsumos:finsu,
                     receitas, recebimentos:rec, vendas:vds, cheques:chq, descontos:dsc };
   let copia = null;
-  try { copia = JSON.parse(localStorage.getItem(ESTADO_KEY) || "null"); } catch(e){}
+  // a proteção lê e compara o estado inteiro — custa caro. Basta 1x por sessão (é no boot que a perda aparece).
+  if(!_protecaoFeita){
+    _protecaoFeita = true;
+    try { copia = JSON.parse(localStorage.getItem(ESTADO_KEY) || "null"); } catch(e){}
+  }
   if(copia){
     const faltando = {};
     let nFalta = 0;
@@ -1704,6 +1721,8 @@ function agendarSync(){
   clearTimeout(realtimeTimer);
   realtimeTimer = setTimeout(async () => {
     if(document.querySelector(".overlay")) return; // não recarrega com um modal aberto
+    if(document.hidden) return;                    // app em segundo plano: espera voltar
+    if(document.activeElement && /INPUT|TEXTAREA/.test(document.activeElement.tagName)) return; // digitando
     await carregarTudo();
     aplicarLeitura(); aplicarAbas();
     const p = paginaAtual();
@@ -1713,7 +1732,7 @@ function agendarSync(){
     else if(p === "vendas") renderVendas();
     else if(p === "cheques") renderCheques($("#view-cheques"));
     else if(p === "cadastro") renderCadastro();
-  }, 700);
+  }, 2500);
 }
 $$(".nav a").forEach(a => a.onclick = () => {
   if(a.dataset.nav === "leite") leiteAba = "apagar";   // Leite sempre abre em "A pagar"
@@ -2068,15 +2087,22 @@ async function salvarAbasVisiveis(){
   if(error) toast("Erro ao salvar abas: "+(error.message||"?"), true);
 }
 function abrirModalConfig(){
+  let _diag = "";
+  try {
+    const kb = Math.round((localStorage.getItem(ESTADO_KEY)||"").length/1024);
+    _diag = `${kb} KB neste aparelho · ${state.cheques.length} cheques · ${state.recebimentos.length} recebimentos · ${state.vendas.length} vendas · ${state.lotes.length} lotes`;
+  } catch(e){ _diag = "não foi possível medir"; }
   const secaoAparelho = `
     <div class="rotulo" style="margin-top:4px">Este aparelho</div>
     <label class="cfg-aba" style="border:1px solid var(--linha-forte);border-radius:12px;padding:12px;margin-bottom:6px">
       <input type="checkbox" id="cfg-baixa" ${podeBaixa?"checked":""}>
       <span style="flex:1">Pode dar baixa em cheque<br><span style="font-weight:400;font-size:.78rem;color:var(--tinta-mole)">Mesmo com o app em modo leitura (cadeado). Vale só neste celular.</span></span>
+    </label>
     <label class="cfg-aba" style="border:1px solid var(--linha-forte);border-radius:12px;padding:12px;margin-bottom:6px">
       <input type="checkbox" id="cfg-leve" ${modoLeve?"checked":""}>
       <span style="flex:1">Modo leve (celular fraco)<br><span style="font-weight:400;font-size:.78rem;color:var(--tinta-mole)">Desliga gráficos e efeitos pra não travar. Vale só neste celular.</span></span>
-    </label>`;
+    </label>
+    <div class="dica" style="font-size:.72rem;margin:-2px 0 8px">📊 ${_diag}</div>`;
   if(soLeitura){
     abrirFolha(`
       <h2>Configurações</h2>
