@@ -150,6 +150,12 @@ body.leitura .fab-ia{display:none !important}
 .nav{position:fixed;bottom:0;left:0;right:0;z-index:30;background:rgba(255,253,248,.92);
   backdrop-filter:blur(12px);border-top:1px solid var(--linha);
   display:flex;padding:8px 6px calc(8px + env(safe-area-inset-bottom))}
+/* modo leve: celular fraco — mata efeitos pesados */
+body.leve *{animation:none !important;transition:none !important}
+body.leve .nav,body.leve .overlay{backdrop-filter:none !important}
+body.leve .nav{background:var(--card)}
+body.leve .graf-scroll,body.leve .graf-card{display:none !important}
+body.leve .heroi svg{display:none}
 .nav a{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;font-size:10px;
   font-weight:600;color:var(--tinta-mole);padding:4px 2px;border-radius:10px;white-space:nowrap;min-width:0}
 .nav a.ativo{color:var(--ouro-esc)}
@@ -583,7 +589,7 @@ body.leitura.libera-baixa #btn-config{ display:inline-flex !important }
    ======================================================================= */
 const SUPABASE_URL      = "https://cadnmgaymgljmoadebkk.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uBKKvD_e5ef4326TvkFgcg_rRnjmTus";
-const APP_VER = "v121";
+const APP_VER = "v122";
 const SPLASH_MIN = 2400;
 const EMAIL_ADMIN = "jpferreira1356@icloud.com";
 const splashT0 = Date.now();                              // suba junto com o cache do sw.js
@@ -596,6 +602,23 @@ let familiaNome = "";
 let privado = false;
 let soLeitura = false;
 try { soLeitura = localStorage.getItem("modo_leitura") === "1"; } catch(e){}
+// modo leve: liga sozinho em celular fraco (≤4GB RAM), ou manual
+let modoLeve = false;
+try {
+  const salvo = localStorage.getItem("modo_leve");
+  if(salvo === "1") modoLeve = true;
+  else if(salvo === "0") modoLeve = false;
+  else modoLeve = (navigator.deviceMemory && navigator.deviceMemory <= 4) || false;  // auto
+} catch(e){}
+function aplicarLeve(){ document.body.classList.toggle("leve", modoLeve); }
+function setModoLeve(v){
+  modoLeve = !!v;
+  try { localStorage.setItem("modo_leve", v ? "1" : "0"); } catch(e){}
+  aplicarLeve();
+  const p = paginaAtual && paginaAtual();
+  if(p === "inicio") renderInicio();
+  else if(p === "leite") renderRecebimento();
+}
 let podeBaixa = false;   // permissão só deste aparelho: dar baixa em cheque mesmo em modo leitura
 try { podeBaixa = localStorage.getItem("pode_baixa_cheque") === "1"; } catch(e){}
 function setPodeBaixa(v){
@@ -613,6 +636,7 @@ function bloqueiaBaixa(){
   return true;
 }
 function aplicarLeitura(){
+  aplicarLeve();
   document.body.classList.toggle("leitura", soLeitura);
   document.body.classList.toggle("libera-baixa", podeBaixa);
   const b = $("#btn-leitura");
@@ -2030,6 +2054,9 @@ function abrirModalConfig(){
     <label class="cfg-aba" style="border:1px solid var(--linha-forte);border-radius:12px;padding:12px;margin-bottom:6px">
       <input type="checkbox" id="cfg-baixa" ${podeBaixa?"checked":""}>
       <span style="flex:1">Pode dar baixa em cheque<br><span style="font-weight:400;font-size:.78rem;color:var(--tinta-mole)">Mesmo com o app em modo leitura (cadeado). Vale só neste celular.</span></span>
+    <label class="cfg-aba" style="border:1px solid var(--linha-forte);border-radius:12px;padding:12px;margin-bottom:6px">
+      <input type="checkbox" id="cfg-leve" ${modoLeve?"checked":""}>
+      <span style="flex:1">Modo leve (celular fraco)<br><span style="font-weight:400;font-size:.78rem;color:var(--tinta-mole)">Desliga gráficos e efeitos pra não travar. Vale só neste celular.</span></span>
     </label>`;
   if(soLeitura){
     abrirFolha(`
@@ -2044,6 +2071,7 @@ function abrirModalConfig(){
       setPodeBaixa(e.target.checked);
       toast(e.target.checked ? "Este aparelho já pode dar baixa em cheque. ✅" : "Baixa de cheque bloqueada neste aparelho.");
     };
+    $("#cfg-leve").onchange = (e) => { setModoLeve(e.target.checked); toast(e.target.checked?"Modo leve ligado. 🪶":"Modo leve desligado."); };
     return;
   }
   const vis = abasVisiveisSet();
@@ -2074,6 +2102,7 @@ function abrirModalConfig(){
     setPodeBaixa(e.target.checked);
     toast(e.target.checked ? "Este aparelho já pode dar baixa em cheque. ✅" : "Baixa de cheque bloqueada neste aparelho.");
   };
+  $("#cfg-leve").onchange = (e) => { setModoLeve(e.target.checked); toast(e.target.checked?"Modo leve ligado. 🪶":"Modo leve desligado."); };
   if(ehAdmin()){
     $("#cfg-admin").onclick = abrirPainelAdmin;
     $("#cfg-abas-salvar").onclick = salvarAbasVisiveis;
