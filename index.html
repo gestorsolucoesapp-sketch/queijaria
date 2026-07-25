@@ -594,7 +594,7 @@ body.leitura.libera-baixa #btn-config{ display:inline-flex !important }
    ======================================================================= */
 const SUPABASE_URL      = "https://cadnmgaymgljmoadebkk.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uBKKvD_e5ef4326TvkFgcg_rRnjmTus";
-const APP_VER = "v131";
+const APP_VER = "v132";
 const SPLASH_MIN = 700;
 const EMAIL_ADMIN = "jpferreira1356@icloud.com";
 const splashT0 = Date.now();                              // suba junto com o cache do sw.js
@@ -3992,10 +3992,18 @@ async function salvarCheque(id){
   if(id){
     const c = state.cheques.find(x=>x.id===id);
     if(!c){ fecharModal(); toast("Registro não encontrado. Recarregue o app.", true); return; }
-    const bak = {...c}; Object.assign(c, dados);
-    fecharModal(); refreshCheques(); toast("Cheque atualizado.");
-    const { error } = await dbw("cheques").update(dados).eq("id", id);
-    if(error){ Object.assign(c, bak); refreshCheques(); toast("Erro ao salvar: "+(error.message||"?"), true); }
+    const aplicar = async () => {
+      const bak = {...c}; Object.assign(c, dados);
+      fecharModal(); refreshCheques(); toast("Cheque atualizado.");
+      const { error } = await dbw("cheques").update(dados).eq("id", id);
+      if(error){ Object.assign(c, bak); refreshCheques(); toast("Erro ao salvar: "+(error.message||"?"), true); }
+    };
+    // mudar o VALOR de um cheque já lançado mexe em dinheiro: exige senha
+    if(Math.abs((Number(c.valor)||0) - valor) > 0.005){
+      confirmarComSenha(`Alterar o valor do cheque de <b>${esc(c.para||"—")}</b> de <b>${brl(c.valor)}</b> para <b>${brl(valor)}</b>?`, aplicar);
+      return;
+    }
+    await aplicar();
   } else {
     const novo = { id:uid(), familia_id:familiaId, compensado:false, ...dados };
     state.cheques.unshift(novo); fecharModal(); refreshCheques(); toast("Cheque registrado.");
