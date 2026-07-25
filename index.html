@@ -594,7 +594,7 @@ body.leitura.libera-baixa #btn-config{ display:inline-flex !important }
    ======================================================================= */
 const SUPABASE_URL      = "https://cadnmgaymgljmoadebkk.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uBKKvD_e5ef4326TvkFgcg_rRnjmTus";
-const APP_VER = "v132";
+const APP_VER = "v133";
 const SPLASH_MIN = 700;
 const EMAIL_ADMIN = "jpferreira1356@icloud.com";
 const splashT0 = Date.now();                              // suba junto com o cache do sw.js
@@ -3093,24 +3093,26 @@ function pagarComEscolha(ids){
   };
   pintarSug();
   $("#pg-ok").onclick = () => {
-    let cheques = null;
+    let cheques = null, ajuste = null, resumo;
     if(forma === "cheque"){
       const validas = parcelas.filter(p => (Number(p.valor)||0) > 0 && p.data);
       if(!validas.length){ $("#pg-erro").textContent = "Informe valor e data do cheque."; return; }
-      const dif = Math.round((liquido - validas.reduce((s,p)=>s+(Number(p.valor)||0),0))*100)/100;
-      if(Math.abs(dif) > 0.005){
-        $("#pg-erro").textContent = dif > 0
-          ? `A soma dos cheques está ${brl(dif)} abaixo do total (${brl(liquido)}).`
-          : `A soma dos cheques passou ${brl(-dif)} do total (${brl(liquido)}).`;
-        return;
-      }
       cheques = validas.map(p => ({ para:nome, valor:Math.round((Number(p.valor)||0)*100)/100,
         numero:(p.numero||null), prazo_dias:0, data:p.data }));
+      const soma = cheques.reduce((s,c)=> s+c.valor, 0);
+      const dif = Math.round((liquido - soma)*100)/100;
+      resumo = `Confirmar pagamento de <b>${esc(nome)}</b> — <b>${brl(soma)}</b> em ${cheques.length===1?"cheque":cheques.length+" cheques"}?`;
+      if(dif > 0.005){
+        // cheque menor que o devido: a diferença vira desconto lançado nesse pagamento
+        ajuste = { valor: dif, descricao: "Diferença no pagamento em cheque" };
+        resumo += `<br><br>⚠️ O devido é <b>${brl(liquido)}</b>. A diferença de <b>${brl(dif)}</b> vai ser lançada como <b>desconto</b> neste pagamento.`;
+      } else if(dif < -0.005){
+        resumo += `<br><br>⚠️ O devido é <b>${brl(liquido)}</b>. Você está pagando <b>${brl(-dif)}</b> a mais.`;
+      }
+    } else {
+      resumo = `Confirmar pagamento de <b>${esc(nome)}</b> — <b>${brl(liquido)}</b> em dinheiro/Pix?`;
     }
-    const resumo = forma === "cheque"
-      ? `Confirmar pagamento de <b>${esc(nome)}</b> — <b>${brl(liquido)}</b> em ${cheques.length===1?"cheque":cheques.length+" cheques"}?`
-      : `Confirmar pagamento de <b>${esc(nome)}</b> — <b>${brl(liquido)}</b> em dinheiro/Pix?`;
-    confirmarComSenha(resumo, () => { fecharModal(); marcarPagoGrupo(ids, cheques); });
+    confirmarComSenha(resumo, () => { fecharModal(); marcarPagoGrupo(ids, cheques, ajuste); });
   };
 }
 // janela (em dias) usada pra sugerir o melhor dia do cheque
@@ -3153,7 +3155,7 @@ function sugerirDiaCheque(){
   return { opcoes, melhor, data: melhor ? melhor.data : addDias(hoje(), ate) };
 }
 
-async function marcarPagoGrupo(ids, cheque){
+async function marcarPagoGrupo(ids, cheque, ajuste){
   if(bloqueiaLeitura()) return;
   const alvo = state.recebimentos.filter(r => ids.includes(r.id));
   if(!alvo.length) return;
@@ -3164,6 +3166,15 @@ async function marcarPagoGrupo(ids, cheque){
   if(descUsar.length){
     descUsar.forEach(d => { d.usado = true; d.usado_em = emPg; });
     dbw("descontos").update({ usado:true, usado_em:emPg }).in("id", descUsar.map(d=>d.id)).then(()=>{}, ()=>{});
+  }
+  // cheque saiu menor que o devido: registra a diferença pra conta fechar no histórico
+  if(ajuste && (Number(ajuste.valor)||0) > 0.005){
+    const nd = { id:uid(), familia_id:familiaId, fornecedor_id:fids[0],
+      descricao: ajuste.descricao || "Ajuste no pagamento",
+      valor: Math.round((Number(ajuste.valor)||0)*100)/100,
+      data: emPg, usado: true, usado_em: emPg };
+    state.descontos.push(nd);
+    dbw("descontos").insert(nd).then(()=>{}, ()=>{});
   }
   // se pagou com cheque(s), lança no controle de cheques
   const listaChq = Array.isArray(cheque) ? cheque : (cheque ? [cheque] : []);
