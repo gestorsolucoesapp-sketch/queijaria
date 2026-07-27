@@ -594,7 +594,7 @@ body.leitura.libera-baixa #btn-config{ display:inline-flex !important }
    ======================================================================= */
 const SUPABASE_URL      = "https://cadnmgaymgljmoadebkk.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uBKKvD_e5ef4326TvkFgcg_rRnjmTus";
-const APP_VER = "v136";
+const APP_VER = "v137";
 const SPLASH_MIN = 700;
 const EMAIL_ADMIN = "jpferreira1356@icloud.com";
 const splashT0 = Date.now();                              // suba junto com o cache do sw.js
@@ -2976,6 +2976,7 @@ function pagarComEscolha(ids){
     </div>
     <div class="erro" id="pg-erro"></div>
     <button class="btn btn-primario" id="pg-ok" style="background:var(--verde)">Confirmar pagamento</button>
+    <button type="button" class="btn btn-fantasma" id="pg-cancelar" style="margin-top:6px">Cancelar</button>
     <div id="pg-extra">
       <button type="button" id="pg-add" style="width:100%;margin:10px 0 8px;padding:12px;border:2px dashed var(--ouro);background:#fff6e6;color:var(--ouro-esc);border-radius:12px;font-weight:800;font-family:inherit;font-size:.95rem;cursor:pointer">＋ Dividir em outro cheque</button>
       <div id="pg-sug" class="pg-sug"></div>
@@ -3095,6 +3096,7 @@ function pagarComEscolha(ids){
     $("#pg-ate").onchange = aplicaJanela;
   };
   pintarSug();
+  $("#pg-cancelar").onclick = fecharModal;
   $("#pg-ok").onclick = () => {
     let cheques = null, ajuste = null, resumo;
     if(forma === "cheque"){
@@ -3565,6 +3567,7 @@ function abrirModalRecebimento(id, fornPre){
     <div class="previa" id="r-previa"></div>
     <div class="erro" id="r-erro"></div>
     <button class="btn btn-primario" id="r-salvar">Salvar</button>
+    <button type="button" class="btn btn-fantasma" id="r-cancelar" style="margin-top:6px">Cancelar</button>
     ${botaoExcluir(id?"r-excluir":"","Excluir recebimento")}`);
   const precoAuto = () => precoLitroPara(calcExpr($("#r-litros").value) || 0);
   const precoUsado = () => {
@@ -3614,7 +3617,8 @@ function abrirModalRecebimento(id, fornPre){
   $("#r-forn").onchange = previa;
   $("#r-data").onchange = previa;
   previa();
-  $("#r-salvar").onclick = () => salvarRecebimento(id);
+  armarConfirmacao($("#r-salvar"), () => salvarRecebimento(id));
+  $("#r-cancelar") && ($("#r-cancelar").onclick = fecharModal);
   if(id) $("#r-excluir").onclick = () => confirmarComSenha("Apagar esta entrega de leite?", () => excluirRecebimento(id));
 }
 async function salvarRecebimento(id){
@@ -3655,6 +3659,28 @@ function refreshCheques(){
   const vc = $("#view-cheques");
   if(vc && !vc.classList.contains("hidden")) renderCheques(vc);
   else renderRecebimento();
+}
+// confirmação em dois toques: 1º toque arma ("toque de novo"), 2º executa; Cancelar desarma
+function armarConfirmacao(btn, fn){
+  if(!btn) return;
+  const original = btn.innerHTML;
+  btn.onclick = () => {
+    if(btn.dataset.armado === "1"){
+      btn.dataset.armado = ""; btn.innerHTML = original;
+      const c = btn.nextElementSibling;
+      if(c && c.classList.contains("cx-cancel")) c.remove();
+      fn();
+      return;
+    }
+    btn.dataset.armado = "1";
+    btn.innerHTML = "Toque de novo pra CONFIRMAR ✓";
+    const c = document.createElement("button");
+    c.type = "button"; c.className = "btn btn-fantasma cx-cancel";
+    c.textContent = "Cancelar"; c.style.marginTop = "6px";
+    c.onclick = () => { btn.dataset.armado = ""; btn.innerHTML = original; c.remove(); };
+    btn.insertAdjacentElement("afterend", c);
+    setTimeout(() => { if(btn.dataset.armado === "1"){ btn.dataset.armado = ""; btn.innerHTML = original; c.remove(); } }, 7000);
+  };
 }
 function confirmarAcao(msg, aoConfirmar, opts={}){
   const { titulo="Confirmação", ok="Confirmar", corOk="var(--ouro)", corTexto="#3a2a05" } = opts;
@@ -3978,6 +4004,7 @@ function abrirModalCheque(id){
     <div class="previa" id="c-previa"></div>
     <div class="erro" id="c-erro"></div>
     <button class="btn btn-primario" id="c-salvar">Salvar</button>
+    <button type="button" class="btn btn-fantasma" id="c-cancelar" style="margin-top:6px">Cancelar</button>
     ${(id && c.compensado) ? `<button class="btn btn-fantasma" id="c-voltar" style="margin-top:6px;color:var(--verde);font-weight:700">↩︎ Voltar cheque (desfazer baixa)</button>` : ""}
     ${botaoExcluir(id?"c-excluir":"","Excluir cheque")}`);
   const modoInicial = (id && (Number(c.prazo_dias)||0) === 0) ? "direta" : "prazo";
@@ -4010,7 +4037,8 @@ function abrirModalCheque(id){
   });
   $("#c-data").onchange = previa; $("#c-prazo").oninput = previa; $("#c-vdata").onchange = previa; $("#c-valor").oninput = previa;
   setModo(modoInicial);
-  $("#c-salvar").onclick = () => salvarCheque(id);
+  armarConfirmacao($("#c-salvar"), () => salvarCheque(id));
+  $("#c-cancelar") && ($("#c-cancelar").onclick = fecharModal);
   if(id && c.compensado) $("#c-voltar").onclick = () => alternarBaixaCheque(id);
   if(id) $("#c-excluir").onclick = () => confirmarComSenha("Apagar este cheque?", () => excluirCheque(id));
 }
