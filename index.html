@@ -357,6 +357,13 @@ body.leitura.libera-baixa #btn-config{ display:inline-flex !important }
 .pg-parc{border:1px solid var(--linha-forte);border-radius:12px;padding:10px 12px;margin-bottom:8px;background:var(--card)}
 .pg-parc-cab{display:flex;justify-content:space-between;align-items:center;font-size:.8rem;color:var(--ouro-esc);margin-bottom:6px}
 .pg-parc-x{border:none;background:none;color:var(--vermelho);font-size:.76rem;font-weight:700;font-family:inherit;cursor:pointer;padding:0}
+.cal-ov{position:fixed;inset:0;z-index:999;background:rgba(46,42,36,.5);display:grid;place-items:center;padding:16px}
+.cal-box{background:var(--card);border-radius:18px;padding:16px;width:min(92vw,400px);box-shadow:0 18px 50px rgba(0,0,0,.3)}
+.cal-nav{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
+.cal-mes{font-size:1.25rem;font-weight:800;text-transform:capitalize;color:var(--tinta)}
+.cal-seta{width:52px;height:52px;border:1px solid var(--linha-forte);background:var(--fundo);border-radius:12px;font-size:1.7rem;color:var(--ouro-esc);cursor:pointer;font-weight:800}
+.pd-btn{width:100%;padding:12px 10px;border:1px solid var(--linha-forte);border-radius:12px;background:#fff;font-family:inherit;font-size:.95rem;text-align:left;color:var(--tinta);cursor:pointer}
+.pd-btn.vazio{color:var(--vermelho);font-weight:700}
 /* agenda */
 .ag-nav{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
 .ag-seta{width:38px;height:38px;border:1px solid var(--linha-forte);background:var(--card);border-radius:10px;font-size:1.3rem;color:var(--ouro-esc);cursor:pointer}
@@ -594,7 +601,7 @@ body.leitura.libera-baixa #btn-config{ display:inline-flex !important }
    ======================================================================= */
 const SUPABASE_URL      = "https://cadnmgaymgljmoadebkk.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uBKKvD_e5ef4326TvkFgcg_rRnjmTus";
-const APP_VER = "v137";
+const APP_VER = "v138";
 const SPLASH_MIN = 700;
 const EMAIL_ADMIN = "jpferreira1356@icloud.com";
 const splashT0 = Date.now();                              // suba junto com o cache do sw.js
@@ -2996,7 +3003,7 @@ function pagarComEscolha(ids){
         <div class="pg-parc-cab"><b>Cheque ${i+1}${parcelas.length>1?` de ${parcelas.length}`:""}</b>${parcelas.length>1?`<button type="button" class="pg-parc-x" data-rm="${i}">remover</button>`:""}</div>
         <div class="linha-campos">
           <div class="campo"><label>Valor (R$)</label><input data-pv="${i}" type="text" inputmode="decimal" value="${p.valor ? String(p.valor).replace(".",",") : ""}"></div>
-          <div class="campo"><label>Data de cair</label><input data-pd="${i}" type="date" value="${p.data}"></div>
+          <div class="campo"><label>Data de cair</label><button type="button" class="pd-btn ${p.data?"":"vazio"}" data-pd="${i}">${p.data ? "📅 " + dataBR(p.data) : "📅 escolher data"}</button></div>
         </div>
         <div class="campo"><label>Nº do cheque</label><input data-pn="${i}" inputmode="numeric" value="${esc(p.numero||"")}" placeholder="opcional"></div>
       </div>`).join("");
@@ -3007,7 +3014,10 @@ function pagarComEscolha(ids){
           : `<span style="color:var(--vermelho)">⚠️ ${dif>0?`Faltam <b>${brl(dif)}</b>`:`Passou <b>${brl(-dif)}</b>`} — soma ${brl(somaParc())} de ${brl(liquido)}</span>`)
       : "";
     $$("[data-pv]").forEach(el => el.oninput = () => { parcelas[+el.dataset.pv].valor = calcExpr(el.value)||0; atualizaResto(); });
-    $$("[data-pd]").forEach(el => el.onchange = () => { parcelas[+el.dataset.pd].data = el.value; pintarSug(); });
+    $$("[data-pd]").forEach(el => el.onclick = () => {
+      const i = +el.dataset.pd;
+      abrirCal(parcelas[i].data || null, (iso) => { parcelas[i].data = iso; pintarParcelas(); pintarSug(); });
+    });
     $$("[data-pn]").forEach(el => el.oninput = () => { parcelas[+el.dataset.pn].numero = el.value.trim(); });
     $$("[data-rm]").forEach(b => b.onclick = () => {
       const i = +b.dataset.rm;
@@ -3681,6 +3691,43 @@ function armarConfirmacao(btn, fn){
     btn.insertAdjacentElement("afterend", c);
     setTimeout(() => { if(btn.dataset.armado === "1"){ btn.dataset.armado = ""; btn.innerHTML = original; c.remove(); } }, 7000);
   };
+}
+// calendário próprio (grande) para escolher data — sobrepõe a folha atual sem fechá-la
+function abrirCal(dataSel, cb){
+  const wrap = document.createElement("div");
+  wrap.className = "cal-ov";
+  let ref = dataSel ? new Date(dataSel + "T12:00:00") : new Date();
+  const render = () => {
+    const ano = ref.getFullYear(), mes = ref.getMonth();
+    const prim = new Date(ano, mes, 1);
+    const nDias = new Date(ano, mes+1, 0).getDate();
+    const ini = prim.getDay();
+    let cels = "";
+    for(let i=0;i<ini;i++) cels += `<div class="ag-cel vazia"></div>`;
+    for(let d=1; d<=nDias; d++){
+      const iso = `${ano}-${String(mes+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
+      const tem = cargaDoDia(iso) > 0;
+      const sel = iso === dataSel, hj = iso === hoje();
+      cels += `<div class="ag-cel ${tem?"tem":""} ${hj?"hj":""} ${sel?"sel":""}" data-cald="${iso}">${d}</div>`;
+    }
+    const nomeMes = prim.toLocaleDateString("pt-BR", { month:"long", year:"numeric" });
+    wrap.innerHTML = `<div class="cal-box">
+      <div class="cal-nav">
+        <button class="cal-seta" data-calm="-1">‹</button>
+        <div class="cal-mes">${nomeMes}</div>
+        <button class="cal-seta" data-calm="1">›</button>
+      </div>
+      <div class="ag-grade">${["D","S","T","Q","Q","S","S"].map(x=>`<div class="ag-cab">${x}</div>`).join("")}${cels}</div>
+      <p class="dica" style="margin:10px 0 0;text-align:center">dia com borda vermelha já tem cheque caindo</p>
+      <button class="btn btn-fantasma" id="cal-fechar" style="margin-top:10px">Cancelar</button>
+    </div>`;
+    wrap.querySelectorAll("[data-calm]").forEach(b => b.onclick = (e) => { e.stopPropagation(); ref = new Date(ref.getFullYear(), ref.getMonth()+Number(b.dataset.calm), 1); render(); });
+    wrap.querySelectorAll("[data-cald]").forEach(c => c.onclick = () => { wrap.remove(); cb(c.dataset.cald); });
+    wrap.querySelector("#cal-fechar").onclick = () => wrap.remove();
+  };
+  wrap.onclick = (e) => { if(e.target === wrap) wrap.remove(); };
+  document.body.appendChild(wrap);
+  render();
 }
 function confirmarAcao(msg, aoConfirmar, opts={}){
   const { titulo="Confirmação", ok="Confirmar", corOk="var(--ouro)", corTexto="#3a2a05" } = opts;
