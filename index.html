@@ -594,7 +594,7 @@ body.leitura.libera-baixa #btn-config{ display:inline-flex !important }
    ======================================================================= */
 const SUPABASE_URL      = "https://cadnmgaymgljmoadebkk.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uBKKvD_e5ef4326TvkFgcg_rRnjmTus";
-const APP_VER = "v135";
+const APP_VER = "v136";
 const SPLASH_MIN = 700;
 const EMAIL_ADMIN = "jpferreira1356@icloud.com";
 const splashT0 = Date.now();                              // suba junto com o cache do sw.js
@@ -2981,7 +2981,7 @@ function pagarComEscolha(ids){
       <div id="pg-sug" class="pg-sug"></div>
     </div>`);
   let forma = "cheque";
-  let parcelas = [{ valor: liquido, data: sug.data, numero: "" }];
+  let parcelas = [{ valor: liquido, data: "", numero: "" }];
   $$(".seg-pag").forEach(b => b.onclick = () => {
     forma = b.dataset.forma;
     $$(".seg-pag").forEach(x => x.classList.toggle("ativo", x===b));
@@ -3032,9 +3032,9 @@ function pagarComEscolha(ids){
       const u = parcelas[parcelas.length-1];
       const metade = Math.round((Number(u.valor)||0)/2*100)/100;
       u.valor = Math.round(((Number(u.valor)||0)-metade)*100)/100;
-      parcelas.push({ valor: metade, data: s.data, numero: "" });
+      parcelas.push({ valor: metade, data: "", numero: "" });
     } else {
-      parcelas.push({ valor: dif, data: s.data, numero: "" });
+      parcelas.push({ valor: dif, data: "", numero: "" });
     }
     pintarParcelas(); pintarSug();
     toast(`Cheque ${parcelas.length} adicionado. Ajuste valor e data. ✂️`);
@@ -3076,7 +3076,7 @@ function pagarComEscolha(ids){
       </div>
       <div class="pg-sug-tit">${s.melhor ? `💡 Dia mais tranquilo: <b>${dataBR(s.melhor.data)}</b> (${s.melhor.carga>0?`só ${brl(s.melhor.carga)} nesse dia`:"nenhum cheque nesse dia"})` : ""}</div>
       <div class="pg-chips">${opts}</div>
-      <div class="pg-sug-lbl">Escolhido: <b>${dataBR(d)}</b> · ${dias} dias · ${carga>0?`já tem ${brl(carga)} caindo`:"nenhum cheque nesse dia"}</div>
+      <div class="pg-sug-lbl">${(parcelas[parcelas.length-1]||{}).data ? `Escolhido: <b>${dataBR(d)}</b> · ${dias} dias · ${carga>0?`já tem ${brl(carga)} caindo`:"nenhum cheque nesse dia"}` : `<span style="color:var(--vermelho);font-weight:700">Escolha a data de cair do cheque 👆 (ou toque num dia sugerido)</span>`}</div>
       ${alerta}
       ${listaForn}`;
     $$("[data-sug]").forEach(b => b.onclick = () => {
@@ -3100,6 +3100,8 @@ function pagarComEscolha(ids){
     if(forma === "cheque"){
       const validas = parcelas.filter(p => (Number(p.valor)||0) > 0 && p.data);
       if(!validas.length){ $("#pg-erro").textContent = "Informe valor e data do cheque."; return; }
+      const semData = parcelas.filter(p => (Number(p.valor)||0) > 0 && !p.data);
+      if(semData.length){ $("#pg-erro").textContent = "Escolha a data de cair do cheque."; return; }
       cheques = validas.map(p => ({ para:nome, valor:Math.round((Number(p.valor)||0)*100)/100,
         numero:(p.numero||null), prazo_dias:0, data:p.data }));
       const soma = cheques.reduce((s,c)=> s+c.valor, 0);
