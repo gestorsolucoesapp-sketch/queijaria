@@ -594,7 +594,7 @@ body.leitura.libera-baixa #btn-config{ display:inline-flex !important }
    ======================================================================= */
 const SUPABASE_URL      = "https://cadnmgaymgljmoadebkk.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uBKKvD_e5ef4326TvkFgcg_rRnjmTus";
-const APP_VER = "v134";
+const APP_VER = "v135";
 const SPLASH_MIN = 700;
 const EMAIL_ADMIN = "jpferreira1356@icloud.com";
 const splashT0 = Date.now();                              // suba junto com o cache do sw.js
@@ -2972,18 +2972,21 @@ function pagarComEscolha(ids){
     </div>
     <div id="pg-cheque">
       <div id="pg-parcelas"></div>
-      <button type="button" id="pg-add" style="width:100%;margin:4px 0 8px;padding:12px;border:2px dashed var(--ouro);background:#fff6e6;color:var(--ouro-esc);border-radius:12px;font-weight:800;font-family:inherit;font-size:.95rem;cursor:pointer">＋ Dividir em outro cheque</button>
       <div id="pg-resto" class="pg-sug-lbl" style="margin-bottom:8px"></div>
-      <div id="pg-sug" class="pg-sug"></div>
     </div>
     <div class="erro" id="pg-erro"></div>
-    <button class="btn btn-primario" id="pg-ok" style="background:var(--verde)">Confirmar pagamento</button>`);
+    <button class="btn btn-primario" id="pg-ok" style="background:var(--verde)">Confirmar pagamento</button>
+    <div id="pg-extra">
+      <button type="button" id="pg-add" style="width:100%;margin:10px 0 8px;padding:12px;border:2px dashed var(--ouro);background:#fff6e6;color:var(--ouro-esc);border-radius:12px;font-weight:800;font-family:inherit;font-size:.95rem;cursor:pointer">＋ Dividir em outro cheque</button>
+      <div id="pg-sug" class="pg-sug"></div>
+    </div>`);
   let forma = "cheque";
   let parcelas = [{ valor: liquido, data: sug.data, numero: "" }];
   $$(".seg-pag").forEach(b => b.onclick = () => {
     forma = b.dataset.forma;
     $$(".seg-pag").forEach(x => x.classList.toggle("ativo", x===b));
     $("#pg-cheque").style.display = forma==="cheque" ? "" : "none";
+    $("#pg-extra").style.display = forma==="cheque" ? "" : "none";
   });
   const somaParc = () => parcelas.reduce((s,p)=> s+(Number(p.valor)||0), 0);
   const pintarParcelas = () => {
