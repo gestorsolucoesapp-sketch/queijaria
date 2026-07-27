@@ -594,7 +594,7 @@ body.leitura.libera-baixa #btn-config{ display:inline-flex !important }
    ======================================================================= */
 const SUPABASE_URL      = "https://cadnmgaymgljmoadebkk.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uBKKvD_e5ef4326TvkFgcg_rRnjmTus";
-const APP_VER = "v133";
+const APP_VER = "v134";
 const SPLASH_MIN = 700;
 const EMAIL_ADMIN = "jpferreira1356@icloud.com";
 const splashT0 = Date.now();                              // suba junto com o cache do sw.js
@@ -3112,7 +3112,25 @@ function pagarComEscolha(ids){
     } else {
       resumo = `Confirmar pagamento de <b>${esc(nome)}</b> — <b>${brl(liquido)}</b> em dinheiro/Pix?`;
     }
-    confirmarComSenha(resumo, () => { fecharModal(); marcarPagoGrupo(ids, cheques, ajuste); });
+    const valorMudou = forma === "cheque" && Math.abs(Math.round((liquido - cheques.reduce((s,c)=> s+c.valor, 0))*100)/100) > 0.005;
+    const executa = () => { fecharModal(); marcarPagoGrupo(ids, cheques, ajuste); };
+    if(valorMudou) pedirCodigo(resumo, executa);
+    else confirmarAcao(resumo, executa, { titulo:"Confirmar pagamento", ok:"Confirmar", corOk:"var(--verde)", corTexto:"#fff" });
+  };
+}
+// código exigido apenas quando o VALOR do pagamento é alterado
+function pedirCodigo(msg, aoConfirmar){
+  abrirFolha(`
+    <h2>Valor alterado</h2>
+    <p class="dica">${msg}</p>
+    <div class="campo"><label>Código de liberação</label><input id="pc-cod" type="password" inputmode="numeric" placeholder="••••••"></div>
+    <div class="erro" id="pc-erro"></div>
+    <button class="btn btn-primario" id="pc-ok" style="background:var(--verde)">Confirmar</button>
+    <button class="btn btn-fantasma" id="pc-nao" style="margin-top:6px">Cancelar</button>`);
+  $("#pc-nao").onclick = fecharModal;
+  $("#pc-ok").onclick = () => {
+    if($("#pc-cod").value.trim() !== "163156"){ $("#pc-erro").textContent = "Código errado."; return; }
+    fecharModal(); aoConfirmar();
   };
 }
 // janela (em dias) usada pra sugerir o melhor dia do cheque
