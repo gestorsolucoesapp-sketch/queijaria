@@ -601,7 +601,7 @@ body.leitura.libera-baixa #btn-config{ display:inline-flex !important }
    ======================================================================= */
 const SUPABASE_URL      = "https://cadnmgaymgljmoadebkk.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uBKKvD_e5ef4326TvkFgcg_rRnjmTus";
-const APP_VER = "v138";
+const APP_VER = "v139";
 const SPLASH_MIN = 700;
 const EMAIL_ADMIN = "jpferreira1356@icloud.com";
 const splashT0 = Date.now();                              // suba junto com o cache do sw.js
@@ -638,7 +638,9 @@ if(window.visualViewport){
     // só é teclado de verdade se tiver um campo focado.
     const a = document.activeElement;
     if(!(a && a.matches && a.matches("input, textarea, select"))) return;
-    document.body.classList.toggle("teclado", vv.height < window.innerHeight * 0.75);
+    // com campo focado, mantém marcado (a comparação usa a TELA física; a janela encolhe junto com o teclado)
+    const kb = vv.height < window.screen.height * 0.72;
+    if(kb) document.body.classList.add("teclado");
   });
 }
 try { if(modoLeve && document.body) document.body.classList.add("leve"); } catch(e){}   // aplica já, antes de renderizar
@@ -4142,7 +4144,14 @@ async function aplicarBaixaCheque(id){
   const bak = { compensado:c.compensado, compensado_em:c.compensado_em };
   if(!c.compensado){ c.compensado = true; c.compensado_em = hoje(); toast("Baixa dada. Foi pros compensados."); }
   else { c.compensado = false; c.compensado_em = null; toast("Baixa desfeita."); }
-  refreshCheques();
+  // se veio da busca, limpa pra já digitar o próximo
+  if(chequeBuscaQ){
+    chequeBuscaQ = "";
+    refreshCheques();
+    setTimeout(() => { const i = $("#chq-q"); if(i){ i.value = ""; i.focus(); } }, 120);
+  } else {
+    refreshCheques();
+  }
   const { error } = await dbw("cheques").update({ compensado:c.compensado, compensado_em:c.compensado_em }).eq("id", id);
   if(error){ Object.assign(c, bak); refreshCheques(); toast("Erro: "+(error.message||"?"), true); }
 }
