@@ -258,7 +258,7 @@ body.leitura .btn-queijo{display:none !important}
 .adm-count{width:40px;height:40px;border-radius:11px;background:var(--verde);color:#fff;display:grid;place-items:center;font-weight:800;font-size:1.1rem;flex:none}
 .adm-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
 .adm-grid .stat{background:var(--card);border:1px solid var(--linha);border-radius:12px;padding:10px 8px;text-align:center;box-shadow:var(--sombra)}
-.mini-acao{display:grid;place-items:center;width:30px;height:30px;border-radius:9px;border:1px solid var(--linha);
+.mini-acao{display:grid;place-items:center;width:44px;height:44px;border-radius:12px;border:1.5px solid var(--linha-forte);
   background:var(--card);color:var(--tinta-mole);cursor:pointer;flex:none;margin-left:4px}
 .mini-acao.del{color:var(--vermelho);border-color:rgba(192,57,43,.3)}
 .mini-add{display:inline-grid;place-items:center;width:22px;height:22px;border-radius:7px;background:var(--ouro);color:#fff;border:none;font-size:1rem;font-weight:800;margin-right:7px;vertical-align:-3px;cursor:pointer;font-family:inherit;line-height:1}
@@ -601,7 +601,7 @@ body.leitura.libera-baixa #btn-config{ display:inline-flex !important }
    ======================================================================= */
 const SUPABASE_URL      = "https://cadnmgaymgljmoadebkk.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uBKKvD_e5ef4326TvkFgcg_rRnjmTus";
-const APP_VER = "v139";
+const APP_VER = "v140";
 const SPLASH_MIN = 700;
 const EMAIL_ADMIN = "jpferreira1356@icloud.com";
 const splashT0 = Date.now();                              // suba junto com o cache do sw.js
@@ -2807,7 +2807,7 @@ function renderLeiteAPagar(corpo){
         return `<div class="tipo vencido" data-grupo="${k}">
           <div>
             <div class="nome"><span class="link-forn" data-fdet="${g.fid}">${esc(nomeForn(g.fid))}</span> <span class="pill-venc on">CICLO FECHADO</span></div>
-            <div class="det">${fechados.length} lançamentos · ${num(lF)} L · venceu ${dataBR(vencF)}${ultTag(ultDiaF)}${desc>0?`<br><span style="color:var(--azul)">− desconto ${brl(desc)} → líquido ${brl(vF-desc)}</span>`:""}${abertos.length?`<br><span style="color:var(--verde)">● ciclo novo: ${brl(vA)} · ${abertos.length} lanç. (próx. ${dataBR(vencA)})${ultDiaA?` · última ${dataBR(ultDiaA)}`:""}</span>`:""}</div>
+            <div class="det">${fechados.length} lançamentos · ${num(lF)} L · ${vencF <= hoje() ? `venceu ${dataBR(vencF)}` : `fechado antecipado (ciclo ia até ${dataBR(vencF)})`}${ultTag(ultDiaF)}${desc>0?`<br><span style="color:var(--azul)">− desconto ${brl(desc)} → líquido ${brl(vF-desc)}</span>`:""}${abertos.length?`<br><span style="color:var(--verde)">● ciclo novo: ${brl(vA)} · ${abertos.length} lanç. (próx. ${dataBR(vencA)})${ultDiaA?` · última ${dataBR(ultDiaA)}`:""}</span>`:""}</div>
           </div>
           <div style="text-align:right">
             <div class="preco">${brl(vF-desc)}</div>
@@ -2850,8 +2850,8 @@ function abrirGrupoRecebimentos(g){
     porDia[r.data].valor  += Number(r.valor_total)||0;
     porDia[r.data].itens.push(r);
   });
-  const editSvg = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.8 2.8 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>`;
-  const delSvg  = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>`;
+  const editSvg = `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.8 2.8 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>`;
+  const delSvg  = `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>`;
   const acoes = (r) => `
     <button class="mini-acao" data-editrec="${r.id}" title="Editar">${editSvg}</button>
     <button class="mini-acao del" data-delrec="${r.id}" title="Apagar">${delSvg}</button>`;
@@ -3566,7 +3566,7 @@ function abrirModalRecebimento(id, fornPre){
     <div class="campo"><label>Data</label><input id="r-data" type="date" value="${r.data||""}"></div>
     <div class="campo"><label>Litros <span id="r-litros-tag" style="font-weight:400;color:var(--tinta-mole)"></span></label>
       <div class="calc-linha">
-        <input id="r-litros" type="text" inputmode="decimal" autocomplete="off" value="${r.litros??""}" placeholder="0">
+        <input id="r-litros" type="text" inputmode="decimal" enterkeyhint="done" autocomplete="off" value="${r.litros??""}" placeholder="0">
         <button type="button" class="calc-op" data-op="+">+</button>
         <button type="button" class="calc-op" data-op="-">−</button>
         <button type="button" class="calc-op calc-eq" id="r-eq">=</button>
@@ -3574,7 +3574,7 @@ function abrirModalRecebimento(id, fornPre){
     </div>
     <div class="campo">
       <label>Preço por litro (R$) <span id="r-preco-tag" style="font-weight:400;color:var(--tinta-mole)"></span></label>
-      <input id="r-preco" type="text" inputmode="decimal" autocomplete="off" value="${r.preco_litro??""}" placeholder="automático">
+      <input id="r-preco" type="text" inputmode="decimal" enterkeyhint="done" autocomplete="off" value="${r.preco_litro??""}" placeholder="automático">
     </div>
     <div class="previa" id="r-previa"></div>
     <div class="erro" id="r-erro"></div>
