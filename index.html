@@ -601,7 +601,7 @@ body.leitura.libera-baixa #btn-config{ display:inline-flex !important }
    ======================================================================= */
 const SUPABASE_URL      = "https://cadnmgaymgljmoadebkk.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uBKKvD_e5ef4326TvkFgcg_rRnjmTus";
-const APP_VER = "v140";
+const APP_VER = "v141";
 const SPLASH_MIN = 700;
 const EMAIL_ADMIN = "jpferreira1356@icloud.com";
 const splashT0 = Date.now();                              // suba junto com o cache do sw.js
@@ -2887,7 +2887,9 @@ function abrirGrupoRecebimentos(g){
   const abertos  = g.itens.filter(r => r.ciclo_fechado !== true && !r.pago);
   abrirFolha(`
     <h2>${esc(nomeForn(g.fid))}</h2>
-    <p class="dica" style="margin-top:-6px">${g.itens.length} lançamentos · ${num(g.litros)} L — total <b>${brl(g.valor)}</b></p>
+    <p class="dica" style="margin-top:-6px">${fechados.length && abertos.length
+      ? `🔒 fechado: <b>${fechados.length} lanç. · ${num(fechados.reduce((s,r)=>s+(Number(r.litros)||0),0))} L · ${brl(fechados.reduce((s,r)=>s+(Number(r.valor_total)||0),0))}</b><br>● ciclo novo: ${abertos.length} lanç. · ${num(abertos.reduce((s,r)=>s+(Number(r.litros)||0),0))} L · ${brl(abertos.reduce((s,r)=>s+(Number(r.valor_total)||0),0))}`
+      : `${g.itens.length} lançamentos · ${num(g.litros)} L — total <b>${brl(g.valor)}</b>`}</p>
     <button class="btn btn-whats" id="grupo-whats">${iconeWhats()} Enviar acerto no WhatsApp</button>
     ${(!soLeitura && fechados.length)?`<button class="btn btn-primario" id="grupo-pagar" style="margin-bottom:6px">💵 Pagar ciclo fechado (${brl(fechados.reduce((s,r)=>s+(Number(r.valor_total)||0),0))})</button>
       <button class="btn btn-fantasma" id="grupo-reabrir" style="margin-bottom:12px">↩︎ Reabrir ciclo</button>`:""}
