@@ -606,7 +606,7 @@ body.leitura.libera-baixa #btn-config{ display:inline-flex !important }
    ======================================================================= */
 const SUPABASE_URL      = "https://cadnmgaymgljmoadebkk.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uBKKvD_e5ef4326TvkFgcg_rRnjmTus";
-const APP_VER = "v142";
+const APP_VER = "v143";
 const SPLASH_MIN = 700;
 const EMAIL_ADMIN = "jpferreira1356@icloud.com";
 const splashT0 = Date.now();                              // suba junto com o cache do sw.js
@@ -4702,8 +4702,8 @@ function abrirModalQueijo(id){
       <div class="campo"><label>Rendimento (pç/L)</label><input id="q-rend" type="number" inputmode="decimal" value="${t.rendimento_esperado??""}" placeholder="opcional"></div>
       <div class="campo"><label>Unidade</label><select id="q-unid"><option value="peças" ${t.unidade!=="kg"?"selected":""}>peças</option><option value="kg" ${t.unidade==="kg"?"selected":""}>kg</option></select></div>
     </div>
-    <div class="rotulo" style="margin:10px 0 6px">Receita de insumos (por peça)</div>
-    <p class="dica" style="margin:-2px 0 8px">Quanto de cada insumo entra em 1 peça. O custo é calculado sozinho.</p>
+    <div class="rotulo" style="margin:10px 0 6px">Receita de insumos (por kg)</div>
+    <p class="dica" style="margin:-2px 0 8px">Quanto de cada insumo entra em <b>1 kg</b> de queijo pronto. O custo é calculado sozinho.</p>
     <div id="q-receita"></div>
     <button type="button" class="btn btn-fantasma" id="q-add-insumo" style="margin-top:4px;font-size:.84rem">+ Adicionar insumo à receita</button>
     <div id="q-custo-box" class="custo-box"></div>
@@ -4713,6 +4713,7 @@ function abrirModalQueijo(id){
     ${botaoExcluir(id?"q-excluir":"","Excluir queijo")}`);
   $("#q-scan").onclick = () => abrirScanner(c => { $("#q-cb").value = c; toast("Código lido: "+c); });
   if($("#q-peca")) $("#q-peca").addEventListener("input", atualizarCustoBox);
+  if($("#q-kg")) $("#q-kg").addEventListener("input", atualizarCustoBox);
   fotoQueijoPend = null;
   $("#q-foto-btn").onclick = () => $("#q-foto").click();
   $("#q-foto").onchange = (e) => {
@@ -4767,16 +4768,16 @@ function desenharReceita(){
 function atualizarCustoBox(){
   const box = $("#q-custo-box"); if(!box) return;
   const custoIns = receitaPend.reduce((s,r)=> s + (Number(r.quantidade)||0)*custoUnitInsumo(state.insumos.find(i=>i.id===r.insumo_id)), 0);
-  const precoPeca = parseFloat($("#q-peca")?.value) || 0;
+  const precoKg = parseFloat($("#q-kg")?.value) || 0;
   let linhaMargem = "";
-  if(precoPeca > 0){
-    const lucro = precoPeca - custoIns;
-    const margem = precoPeca > 0 ? (lucro/precoPeca*100) : 0;
+  if(precoKg > 0){
+    const lucro = precoKg - custoIns;
+    const margem = (lucro/precoKg*100);
     const cor = lucro >= 0 ? "var(--verde)" : "var(--vermelho)";
-    linhaMargem = `<div class="custo-linha"><span>Preço de venda (peça)</span><b>${brl(precoPeca)}</b></div>
-      <div class="custo-linha"><span>Lucro por peça</span><b style="color:${cor}">${brl(lucro)} (${margem.toFixed(0)}%)</b></div>`;
+    linhaMargem = `<div class="custo-linha"><span>Preço de venda (kg)</span><b>${brl(precoKg)}</b></div>
+      <div class="custo-linha"><span>${lucro>=0?"Lucro":"PREJUÍZO"} por kg</span><b style="color:${cor}">${brl(Math.abs(lucro))} (${margem.toFixed(0)}%)</b></div>`;
   }
-  box.innerHTML = `<div class="custo-linha"><span>Custo de insumos por peça</span><b>${brl(custoIns)}</b></div>${linhaMargem}`;
+  box.innerHTML = `<div class="custo-linha"><span>Custo de insumos por kg</span><b>${brl(custoIns)}</b></div>${linhaMargem}`;
 }
 let fotoQueijoPend = null;
 async function salvarQueijo(id){
@@ -4808,12 +4809,12 @@ async function salvarQueijo(id){
     const bak = {...t}; Object.assign(t, dados);
     ordenarPorNome(state.tipos); fecharModal(); renderCadastro(); toast("Queijo atualizado.");
     const { error } = await dbw("tipos_queijo").update(dados).eq("id", id);
-    if(error){ Object.assign(t, bak); renderCadastro(); toast("Não deu pra salvar.", true); }
+    if(error){ Object.assign(t, bak); renderCadastro(); toast("Não salvou: "+(error.message||error.hint||"erro"), true); }
   } else {
     const novo = { id:idFinal, familia_id:familiaId, ...dados };
     state.tipos.push(novo); ordenarPorNome(state.tipos); fecharModal(); renderCadastro(); toast("Queijo cadastrado.");
     const { error } = await dbw("tipos_queijo").insert(novo);
-    if(error){ state.tipos = state.tipos.filter(x=>x.id!==novo.id); renderCadastro(); toast("Não deu pra salvar.", true); }
+    if(error){ state.tipos = state.tipos.filter(x=>x.id!==novo.id); renderCadastro(); toast("Não salvou: "+(error.message||error.hint||"erro"), true); }
   }
   await salvarReceita(idFinal);
 }
