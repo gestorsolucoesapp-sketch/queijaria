@@ -607,7 +607,7 @@ body.leitura.libera-baixa #btn-config{ display:inline-flex !important }
    ======================================================================= */
 const SUPABASE_URL      = "https://cadnmgaymgljmoadebkk.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uBKKvD_e5ef4326TvkFgcg_rRnjmTus";
-const APP_VER = "v151";
+const APP_VER = "v152";
 const SPLASH_MIN = 700;
 const EMAIL_ADMIN = "jpferreira1356@icloud.com";
 const splashT0 = Date.now();                              // suba junto com o cache do sw.js
@@ -2891,6 +2891,7 @@ function abrirGrupoRecebimentos(g){
   const editSvg = `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.8 2.8 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>`;
   const delSvg  = `<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>`;
   const acoes = (r) => `
+    <button class="mini-acao" data-imprec="${r.id}" title="Comprovante">🧾</button>
     <button class="mini-acao" data-editrec="${r.id}" title="Editar">${editSvg}</button>
     <button class="mini-acao del" data-delrec="${r.id}" title="Apagar">${delSvg}</button>`;
   const linhas = Object.keys(porDia).sort().reverse().map(d => {
@@ -2934,7 +2935,7 @@ function abrirGrupoRecebimentos(g){
     ${(!soLeitura && abertos.length)?`<button class="btn btn-primario" id="grupo-fechar" style="background:var(--verde);margin-bottom:12px">🔒 Fechar ciclo agora</button>`:""}
     <div class="rotulo">Entregas por dia</div>
     <div style="max-height:36vh;overflow-y:auto" id="grupo-lista">${linhas}</div>
-    <p class="dica">Lápis edita, lixeira apaga (pede senha). Toque no dia pra recolher.</p>`);
+    <p class="dica">🧾 imprime comprovante · lápis edita · lixeira apaga (pede senha). Toque no dia pra recolher.</p>`);
   $("#grupo-whats").onclick = () => mensagemFornecedor(g.fid, g.itens, dataBR(g.venc));
   if(!soLeitura && fechados.length){
     $("#grupo-pagar").onclick = () => pagarComEscolha(fechados.map(r=>r.id));
@@ -2949,6 +2950,11 @@ function abrirGrupoRecebimentos(g){
         n = n.nextElementSibling;
       }
     };
+  });
+  $$("#grupo-lista [data-imprec]").forEach(b => b.onclick = (e) => {
+    e.stopPropagation();
+    const r = state.recebimentos.find(x=>x.id===b.dataset.imprec);
+    if(r) abrirComprovante(r);
   });
   $$("#grupo-lista [data-editrec]").forEach(b => b.onclick = (e) => { e.stopPropagation(); abrirModalRecebimento(b.dataset.editrec); });
   $$("#grupo-lista [data-delrec]").forEach(b => b.onclick = (e) => { e.stopPropagation(); confirmarComSenha("Apagar esta entrega de leite?", () => excluirRecebimento(b.dataset.delrec)); });
@@ -3696,7 +3702,8 @@ async function salvarRecebimento(id){
     const novo = { id:uid(), familia_id:familiaId, ...dados };
     state.recebimentos.unshift(novo); fecharModal(); renderRecebimento(); toast("Recebimento lançado.");
     const { error } = await dbw("recebimentos_leite").insert(novo);
-    if(error){ state.recebimentos = state.recebimentos.filter(x=>x.id!==novo.id); renderRecebimento(); toast("Erro ao salvar: "+(error.message||error.code||"?"), true); }
+    if(error){ state.recebimentos = state.recebimentos.filter(x=>x.id!==novo.id); renderRecebimento(); toast("Erro ao salvar: "+(error.message||error.code||"?"), true); return; }
+    aposLancar(novo);
   }
 }
 async function excluirRecebimento(id){
@@ -4587,6 +4594,152 @@ async function aplicarBaixasExtrato(){
   fecharModal();
   refreshCheques(); renderInicio();
   toast(`${alvo.length} cheque(s) baixado(s) pelo extrato! ✅`);
+}
+
+/* ===================== 🖨️ COMPROVANTE / IMPRESSORA TÉRMICA ===================== */
+const IMP_KEY = "queijaria_impressora";
+let impDevice = null, impChar = null;
+
+function impAuto(){ try { return localStorage.getItem(IMP_KEY) === "1"; } catch(e){ return false; } }
+function setImpAuto(v){ try { localStorage.setItem(IMP_KEY, v?"1":"0"); } catch(e){} }
+function temBluetooth(){ return !!(navigator.bluetooth && navigator.bluetooth.requestDevice); }
+
+// monta as linhas do comprovante (32 colunas = papel 58mm)
+function textoComprovante(r){
+  const L = 32;
+  const f = state.fornecedores.find(x=>x.id===r.fornecedor_id);
+  const nome = (state.config && state.config.nome_queijaria) || "QUEIJARIA BENE";
+  const cen = (t) => { t = String(t); const e = Math.max(0, Math.floor((L-t.length)/2)); return " ".repeat(e)+t; };
+  const par = (a,b) => { a=String(a); b=String(b); const esp = Math.max(1, L-a.length-b.length); return a+" ".repeat(esp)+b; };
+  const lin = "-".repeat(L);
+  const venc = vencimentoDe(r);
+  return [
+    cen(nome), cen("COMPROVANTE DE ENTREGA"), lin,
+    par("Data:", dataBR(r.data)),
+    par("Produtor:", (f?f.nome:"?").slice(0,20)),
+    lin,
+    par("Litros:", num(r.litros) + " L"),
+    par("Preco/L:", brl(r.preco_litro)),
+    lin,
+    par("TOTAL:", brl(r.valor_total)),
+    lin,
+    par("Pagamento:", dataBR(venc)),
+    "",
+    cen("Emitido em " + dataBR(hoje())),
+    cen("Confira e guarde"),
+    "", "",
+  ].join("\n");
+}
+
+async function conectarImpressora(){
+  if(!temBluetooth()) throw new Error("sem_bluetooth");
+  if(impChar && impDevice && impDevice.gatt.connected) return impChar;
+  const SERVICOS = [
+    "000018f0-0000-1000-8000-00805f9b34fb",
+    "0000ff00-0000-1000-8000-00805f9b34fb",
+    "49535343-fe7d-4ae5-8fa9-9fafd205e455",
+    "e7810a71-73ae-499d-8c15-faa9aef0c3f2",
+  ];
+  impDevice = await navigator.bluetooth.requestDevice({
+    acceptAllDevices: true, optionalServices: SERVICOS
+  });
+  const server = await impDevice.gatt.connect();
+  for(const su of SERVICOS){
+    try{
+      const svc = await server.getPrimaryService(su);
+      const chars = await svc.getCharacteristics();
+      const wc = chars.find(c => c.properties.write || c.properties.writeWithoutResponse);
+      if(wc){ impChar = wc; return impChar; }
+    }catch(e){ /* tenta o próximo */ }
+  }
+  throw new Error("sem_servico");
+}
+
+async function imprimirBluetooth(texto){
+  const ch = await conectarImpressora();
+  const enc = new TextEncoder();
+  // ESC @ (reset) + texto + 3 quebras + corte
+  const ini = new Uint8Array([0x1B, 0x40]);
+  const corpo = enc.encode(texto.normalize("NFD").replace(/[\u0300-\u036f]/g, "") + "\n\n\n");
+  const fim = new Uint8Array([0x1D, 0x56, 0x00]);
+  const tudo = new Uint8Array(ini.length + corpo.length + fim.length);
+  tudo.set(ini, 0); tudo.set(corpo, ini.length); tudo.set(fim, ini.length + corpo.length);
+  // envia em blocos (BLE aceita ~180 bytes por vez)
+  for(let i = 0; i < tudo.length; i += 180){
+    const bloco = tudo.slice(i, i+180);
+    if(ch.properties.writeWithoutResponse) await ch.writeValueWithoutResponse(bloco);
+    else await ch.writeValue(bloco);
+    await new Promise(r => setTimeout(r, 30));
+  }
+}
+
+// desenha o comprovante como imagem (pra compartilhar no iPhone)
+function comprovanteImagem(texto, cb){
+  const linhas = texto.split("\n");
+  const esc = 3, larg = 384, alt = (linhas.length*22 + 40);
+  const cv = document.createElement("canvas");
+  cv.width = larg*esc/3*2; cv.height = alt*2;
+  const ctx = cv.getContext("2d");
+  ctx.scale(2,2);
+  ctx.fillStyle = "#fff"; ctx.fillRect(0,0,cv.width,cv.height);
+  ctx.fillStyle = "#000"; ctx.font = "16px ui-monospace, monospace"; ctx.textBaseline = "top";
+  linhas.forEach((l,i) => ctx.fillText(l, 14, 16 + i*22));
+  cv.toBlob(b => cb(b), "image/png");
+}
+
+function abrirComprovante(r){
+  const txt = textoComprovante(r);
+  const f = state.fornecedores.find(x=>x.id===r.fornecedor_id);
+  abrirFolha(`
+    <h2>🧾 Comprovante</h2>
+    <pre style="background:#fff;border:1px solid var(--linha-forte);border-radius:12px;padding:14px;font-family:ui-monospace,monospace;font-size:12.5px;line-height:1.45;white-space:pre;overflow-x:auto;margin:0 0 12px">${esc(txt)}</pre>
+    ${temBluetooth()
+      ? `<button class="btn btn-primario" id="cp-bt" style="background:var(--verde)">🖨️ Imprimir na térmica</button>
+         <label class="cfg-aba" style="border:1px solid var(--linha-forte);border-radius:12px;padding:10px;margin:8px 0">
+           <input type="checkbox" id="cp-auto" ${impAuto()?"checked":""}>
+           <span style="flex:1;font-size:.86rem">Imprimir sozinho a cada lançamento</span>
+         </label>`
+      : `<div class="pg-alerta" style="margin-bottom:8px">No iPhone o navegador não deixa usar Bluetooth. Use <b>Compartilhar</b> abaixo e escolha o app da impressora (ou mande no WhatsApp).</div>`}
+    <button class="btn btn-primario" id="cp-share" style="background:var(--azul)">📤 Compartilhar / WhatsApp</button>
+    <button class="btn btn-fantasma" id="cp-copiar" style="margin-top:6px">📋 Copiar texto</button>
+    <button class="btn btn-fantasma" id="cp-fechar" style="margin-top:6px">Fechar</button>`);
+  $("#cp-fechar").onclick = fecharModal;
+  $("#cp-copiar").onclick = () => { navigator.clipboard?.writeText(txt); toast("Comprovante copiado. 📋"); };
+  if($("#cp-auto")) $("#cp-auto").onchange = (e) => {
+    setImpAuto(e.target.checked);
+    toast(e.target.checked ? "Vai imprimir sozinho a cada lançamento. 🖨️" : "Impressão automática desligada.");
+  };
+  if($("#cp-bt")) $("#cp-bt").onclick = async () => {
+    const b = $("#cp-bt"); b.disabled = true; b.textContent = "Imprimindo…";
+    try { await imprimirBluetooth(txt); toast("Impresso! 🖨️"); }
+    catch(e){ toast(e.message==="sem_servico" ? "Conectou mas não achei a impressora ESC/POS." : "Não consegui imprimir: "+String(e.message||e), true); }
+    b.disabled = false; b.textContent = "🖨️ Imprimir na térmica";
+  };
+  $("#cp-share").onclick = () => {
+    comprovanteImagem(txt, async (blob) => {
+      const arq = new File([blob], `comprovante-${(f?f.nome:"leite").replace(/\W+/g,"-")}-${r.data}.png`, { type:"image/png" });
+      try{
+        if(navigator.canShare && navigator.canShare({ files:[arq] })){
+          await navigator.share({ files:[arq], title:"Comprovante de entrega" });
+        } else if(navigator.share){
+          await navigator.share({ title:"Comprovante de entrega", text:txt });
+        } else {
+          const a = document.createElement("a");
+          a.href = URL.createObjectURL(blob); a.download = arq.name; a.click();
+          toast("Comprovante baixado. 📥");
+        }
+      }catch(e){ /* usuário cancelou */ }
+    });
+  };
+}
+
+// chamado depois de salvar um lançamento
+async function aposLancar(r){
+  if(impAuto() && temBluetooth()){
+    try { await imprimirBluetooth(textoComprovante(r)); toast("Comprovante impresso. 🖨️"); return; }
+    catch(e){ toast("Não imprimiu: "+String(e.message||e), true); }
+  }
+  abrirComprovante(r);
 }
 
 function renderCustos(){
