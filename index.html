@@ -606,7 +606,7 @@ body.leitura.libera-baixa #btn-config{ display:inline-flex !important }
    ======================================================================= */
 const SUPABASE_URL      = "https://cadnmgaymgljmoadebkk.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uBKKvD_e5ef4326TvkFgcg_rRnjmTus";
-const APP_VER = "v144";
+const APP_VER = "v145";
 const SPLASH_MIN = 700;
 const EMAIL_ADMIN = "jpferreira1356@icloud.com";
 const splashT0 = Date.now();                              // suba junto com o cache do sw.js
@@ -4211,7 +4211,19 @@ function precoLeiteReal(){
 
 function custoItem(it){
   if(it.leite) return (Number(it.qtd)||0) * precoLeiteReal().preco;
-  return (Number(it.qtd)||0) * (Number(it.preco)||0);
+  if(it.insumo_id){                                   // insumo cadastrado: preço vem do cadastro
+    const ins = state.insumos.find(i=>i.id===it.insumo_id);
+    return (Number(it.qtd)||0) * custoUnitInsumo(ins);
+  }
+  return (Number(it.qtd)||0) * (Number(it.preco)||0); // item avulso digitado na mão
+}
+function unitInsumo(it){
+  if(it.leite) return "L";
+  if(it.insumo_id){
+    const ins = state.insumos.find(i=>i.id===it.insumo_id);
+    return ins ? (ins.unidade || "un") : "un";
+  }
+  return it.unidade || "un";
 }
 function custoFicha(f){
   return (f.itens||[]).reduce((s,it)=> s + custoItem(it), 0);
@@ -4287,12 +4299,19 @@ function abrirFicha(id){
         <div class="linha-campos">
           <div class="campo"><label>Qtd</label><input data-itq="${i}" type="text" inputmode="decimal" value="${it.qtd??""}"></div>
           <div class="campo"><label>Unid.</label>
-            <select data-itu="${i}">${UNIDADES.map(u=>`<option value="${u}" ${it.unidade===u?"selected":""}>${u}</option>`).join("")}</select>
+            ${(it.leite || it.insumo_id)
+              ? `<input value="${esc(unitInsumo(it))}" disabled style="background:var(--fundo);color:var(--tinta-mole)">`
+              : `<select data-itu="${i}">${UNIDADES.map(u=>`<option value="${u}" ${it.unidade===u?"selected":""}>${u}</option>`).join("")}</select>`}
           </div>
         </div>
         ${it.leite
           ? `<p class="dica" style="margin:4px 0 0">preço automático: <b>${brl(pl.preco)}/L</b> — ${pl.base}</p>`
-          : `<div class="campo" style="margin-top:6px"><label>Preço por unidade (R$)</label><input data-itp="${i}" type="text" inputmode="decimal" value="${it.preco??""}"></div>`}
+          : it.insumo_id
+            ? (() => { const ins = state.insumos.find(x=>x.id===it.insumo_id);
+                return ins
+                  ? `<p class="dica" style="margin:4px 0 0">do cadastro: <b>${brl(custoUnitInsumo(ins))}/${ins.unidade||"un"}</b>${ins.quantidade>1?` (${brl(ins.preco)} ÷ ${num(ins.quantidade)} ${ins.unidade||"un"})`:""}</p>`
+                  : `<p class="dica" style="margin:4px 0 0;color:var(--vermelho)">insumo apagado do cadastro — remova este item</p>`; })()
+            : `<div class="campo" style="margin-top:6px"><label>Preço por unidade (R$)</label><input data-itp="${i}" type="text" inputmode="decimal" value="${it.preco??""}"></div>`}
         <div style="text-align:right;font-weight:700;color:var(--ouro-esc);margin-top:6px">= ${brl(custoItem(it))}</div>
       </div>`).join("");
     abrirFolha(`
@@ -4305,9 +4324,10 @@ function abrirFicha(id){
       <div class="rotulo" style="margin-top:10px">Itens do custo</div>
       <div id="fc-itens">${linhas || `<p class="dica">Nenhum item ainda. Adicione abaixo 👇</p>`}</div>
       <div style="display:flex;gap:6px;margin:8px 0">
-        <button type="button" class="btn btn-fantasma" id="fc-add" style="flex:1;padding:11px">＋ Item</button>
+        <button type="button" class="btn btn-fantasma" id="fc-addins" style="flex:1;padding:11px;border-color:var(--azul);color:var(--azul)">＋ Insumo</button>
         <button type="button" class="btn btn-fantasma" id="fc-addleite" style="flex:1;padding:11px;border-color:var(--ouro);color:var(--ouro-esc)">🥛 Leite</button>
       </div>
+      <button type="button" class="btn btn-fantasma" id="fc-add" style="width:100%;padding:10px;font-size:.84rem;margin-bottom:8px">＋ Outro item (digitar preço na mão)</button>
       <div class="stat" style="text-align:left;padding:12px 14px;margin-bottom:10px">
         <div style="font-size:.8rem;color:var(--tinta-mole)">Custo total da produção</div>
         <div style="font-family:'IBM Plex Mono',monospace;font-weight:700;font-size:1.3rem">${brl(custo)}</div>
@@ -4368,6 +4388,27 @@ function abrirFicha(id){
       div.querySelector("#fc-ni-ok").onclick = add;
       div.querySelector("#fc-ni-x").onclick = () => div.remove();
       inp.addEventListener("keydown", e => { if(e.key === "Enter"){ e.preventDefault(); add(); } });
+    };
+    $("#fc-addins").onclick = () => {
+      const disp = (state.insumos||[]).filter(i => !f.itens.some(x=>x.insumo_id===i.id));
+      if(!(state.insumos||[]).length){
+        toast("Cadastre os insumos primeiro em Cadastro › Insumos.", true); return;
+      }
+      if(!disp.length){ toast("Todos os insumos cadastrados já estão nesta ficha."); return; }
+      abrirFolha(`
+        <h2>Escolher insumo</h2>
+        <p class="dica" style="margin-top:-6px">O preço vem do cadastro — se mudar lá, a ficha atualiza sozinha.</p>
+        ${disp.map(i=>`<div class="tipo" data-pick="${i.id}" style="cursor:pointer">
+          <div><div class="nome">${esc(i.nome)}${i.marca?` <span style="font-weight:400;color:var(--tinta-mole)">· ${esc(i.marca)}</span>`:""}</div>
+          <div class="det">${brl(custoUnitInsumo(i))} por ${esc(i.unidade||"un")}</div></div>
+          <div class="preco" style="font-size:.9rem">usar</div></div>`).join("")}
+        <button class="btn btn-fantasma" id="pick-voltar" style="margin-top:10px">Voltar</button>`);
+      $("#pick-voltar").onclick = () => pintar();
+      $$("[data-pick]").forEach(el => el.onclick = () => {
+        const ins = state.insumos.find(x=>x.id===el.dataset.pick);
+        f.itens.push({ nome: ins.nome, insumo_id: ins.id, qtd:"", unidade: ins.unidade||"un" });
+        pintar();
+      });
     };
     $("#fc-addleite").onclick = () => {
       if(f.itens.some(i=>i.leite)){ toast("O leite já está na ficha."); return; }
@@ -4721,16 +4762,16 @@ function abrirModalQueijo(id){
       <div class="campo"><label>Rendimento (pç/L)</label><input id="q-rend" type="number" inputmode="decimal" value="${t.rendimento_esperado??""}" placeholder="opcional"></div>
       <div class="campo"><label>Unidade</label><select id="q-unid"><option value="peças" ${t.unidade!=="kg"?"selected":""}>peças</option><option value="kg" ${t.unidade==="kg"?"selected":""}>kg</option></select></div>
     </div>
-    <div class="rotulo" style="margin:10px 0 6px">Receita de insumos (por kg)</div>
-    <p class="dica" style="margin:-2px 0 8px">Quanto de cada insumo entra em <b>1 kg</b> de queijo pronto. O custo é calculado sozinho.</p>
-    <div id="q-receita"></div>
-    <button type="button" class="btn btn-fantasma" id="q-add-insumo" style="margin-top:4px;font-size:.84rem">+ Adicionar insumo à receita</button>
-    <div id="q-custo-box" class="custo-box"></div>
+    <div class="rotulo" style="margin:10px 0 6px">Custo e lucro</div>
+    <p class="dica" style="margin:-2px 0 10px">O cálculo de custo agora fica na aba <b>💰 Custos</b> — lá o leite entra automático e você vê o lucro por kg. <span id="q-ir-custos" style="color:var(--azul);font-weight:700;text-decoration:underline;cursor:pointer">abrir Custos</span></p>
+    <div id="q-receita" style="display:none"></div>
+    <div id="q-custo-box" class="custo-box" style="display:none"></div>
     ${campoCodigoBarras("q-cb","q-scan",t.codigo_barras)}
     <div class="erro" id="q-erro"></div>
     <button class="btn btn-primario" id="q-salvar">Salvar</button>
     ${botaoExcluir(id?"q-excluir":"","Excluir queijo")}`);
   $("#q-scan").onclick = () => abrirScanner(c => { $("#q-cb").value = c; toast("Código lido: "+c); });
+  if($("#q-ir-custos")) $("#q-ir-custos").onclick = () => { fecharModal(); irPara("custos"); };
   if($("#q-peca")) $("#q-peca").addEventListener("input", atualizarCustoBox);
   if($("#q-kg")) $("#q-kg").addEventListener("input", atualizarCustoBox);
   fotoQueijoPend = null;
@@ -4747,7 +4788,7 @@ function abrirModalQueijo(id){
     ? (state.receitas||[]).filter(r=>r.tipo_queijo_id===id).map(r=>({ insumo_id:r.insumo_id, quantidade:Number(r.quantidade)||0 }))
     : [];
   desenharReceita();
-  $("#q-add-insumo").onclick = () => {
+  if($("#q-add-insumo")) $("#q-add-insumo").onclick = () => {
     if(!(state.insumos||[]).length){ toast("Cadastre um insumo primeiro em Cadastro › Insumos.", true); return; }
     receitaPend.push({ insumo_id: state.insumos[0].id, quantidade: 0 });
     desenharReceita();
