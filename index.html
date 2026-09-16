@@ -607,7 +607,7 @@ body.leitura.libera-baixa #btn-config{ display:inline-flex !important }
    ======================================================================= */
 const SUPABASE_URL      = "https://cadnmgaymgljmoadebkk.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uBKKvD_e5ef4326TvkFgcg_rRnjmTus";
-const APP_VER = "v150";
+const APP_VER = "v151";
 const SPLASH_MIN = 700;
 const EMAIL_ADMIN = "jpferreira1356@icloud.com";
 const splashT0 = Date.now();                              // suba junto com o cache do sw.js
@@ -3987,10 +3987,13 @@ function renderCheques(corpo){
       <input id="chq-q" type="search" enterkeyhint="search" placeholder="Buscar por nome ou valor…" value="${esc(chequeBuscaQ)}">
       <button id="chq-x" class="chq-x" aria-label="Limpar busca">×</button>
     </div>
+    ${(!soLeitura || podeBaixa) ? `<button type="button" class="btn btn-fantasma" id="chq-extrato" style="width:100%;padding:11px;margin-bottom:10px;border-color:var(--azul);color:var(--azul);font-size:.9rem">🏦 Dar baixa pelo extrato</button>` : ""}
     <div id="chq-corpo"></div>`;
 
   const cont = corpo.querySelector("#chq-corpo");
   const inp  = corpo.querySelector("#chq-q");
+  const btnExt = corpo.querySelector("#chq-extrato");
+  if(btnExt) btnExt.onclick = abrirExtrato;
   const btnX = corpo.querySelector("#chq-x");
 
   const grafHtml = pend.length
@@ -4433,6 +4436,157 @@ async function gravarImportacao(){
   await carregarTudo();
   renderRecebimento();
   toast(`${linhas.length} lançamentos importados! ✅`);
+}
+
+/* ===================== 🏦 IMPORTAR EXTRATO (baixa de cheques) ===================== */
+let extFotos = [], extItens = [];
+
+function abrirExtrato(){
+  if(bloqueiaBaixa()) return;
+  extFotos = []; extItens = [];
+  pintarExtrato();
+}
+function pintarExtrato(){
+  abrirFolha(`
+    <h2>🏦 Dar baixa pelo extrato</h2>
+    <p class="dica" style="margin-top:-6px">Tire foto ou print do extrato. A IA acha os cheques compensados e casa com os seus cheques em aberto.</p>
+    <div style="display:flex;gap:6px;margin-bottom:8px">
+      <button type="button" class="btn btn-primario" id="ext-cam" style="flex:1;padding:12px">📷 Foto</button>
+      <button type="button" class="btn btn-fantasma" id="ext-gal" style="flex:1;padding:12px">🖼️ Print</button>
+    </div>
+    <input type="file" id="ext-file-cam" accept="image/*" capture="environment" style="display:none">
+    <input type="file" id="ext-file-gal" accept="image/*" multiple style="display:none">
+    <details style="margin-bottom:10px"><summary class="dica" style="cursor:pointer">ou colar o texto do extrato</summary>
+      <textarea id="ext-texto" placeholder="Cole aqui as linhas do extrato…" style="width:100%;min-height:90px;margin-top:6px;padding:10px;border:1px solid var(--linha-forte);border-radius:12px;font-size:15px;font-family:inherit"></textarea>
+      <button type="button" class="btn btn-fantasma" id="ext-lertexto" style="margin-top:6px;padding:10px">🔍 Ler texto colado</button>
+    </details>
+    ${extFotos.length?`<div class="rotulo">${extFotos.length} imagem(ns)</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">
+        ${extFotos.map((f,i)=>`<div style="position:relative">
+          <img src="${f}" style="width:74px;height:74px;object-fit:cover;border-radius:10px;border:1px solid var(--linha-forte)">
+          <button type="button" data-extrm="${i}" style="position:absolute;top:-6px;right:-6px;width:22px;height:22px;border-radius:50%;border:none;background:var(--vermelho);color:#fff;font-weight:800">✕</button>
+        </div>`).join("")}
+      </div>
+      <button type="button" class="btn btn-primario" id="ext-ler" style="background:var(--verde)">🔍 Ler extrato</button>`:""}
+    <div id="ext-res"></div>
+    <button class="btn btn-fantasma" id="ext-fechar" style="margin-top:10px">Fechar</button>`);
+  $("#ext-fechar").onclick = fecharModal;
+  $("#ext-cam").onclick = () => $("#ext-file-cam").click();
+  $("#ext-gal").onclick = () => $("#ext-file-gal").click();
+  const pegar = (e) => {
+    const arqs = [...(e.target.files||[])];
+    let faltam = arqs.length; if(!faltam) return;
+    arqs.forEach(a => comprimirFoto(a, b64 => { extFotos.push(b64); if(--faltam===0) pintarExtrato(); }));
+    e.target.value = "";
+  };
+  $("#ext-file-cam").onchange = pegar;
+  $("#ext-file-gal").onchange = pegar;
+  $$("[data-extrm]").forEach(b => b.onclick = () => { extFotos.splice(+b.dataset.extrm,1); pintarExtrato(); });
+  if($("#ext-ler")) $("#ext-ler").onclick = () => lerExtrato(false);
+  $("#ext-lertexto").onclick = () => lerExtrato(true);
+  if(extItens.length) pintarCasamento();
+}
+
+async function lerExtrato(usarTexto){
+  const btn = usarTexto ? $("#ext-lertexto") : $("#ext-ler");
+  const texto = usarTexto ? ($("#ext-texto").value||"").trim() : "";
+  if(usarTexto && !texto){ toast("Cole o texto do extrato primeiro."); return; }
+  btn.disabled = true; btn.textContent = "Lendo…";
+  $("#ext-res").innerHTML = `<p class="dica">🤖 Procurando cheques compensados…</p>`;
+  try{
+    const { data:{ session } } = await sb.auth.getSession();
+    const r = await fetch(SUPABASE_URL + "/functions/v1/ler-extrato", {
+      method:"POST",
+      headers:{ "content-type":"application/json", "Authorization":"Bearer " + (session?.access_token||"") },
+      body: JSON.stringify(usarTexto ? { texto } : { imagens: extFotos })
+    });
+    const data = await r.json().catch(()=>({}));
+    if(!r.ok || data.error){
+      $("#ext-res").innerHTML = `<p class="erro">Não consegui ler: ${esc(data.detalhe||data.error||"erro")}</p>`;
+      btn.disabled = false; btn.textContent = "🔍 Tentar de novo"; return;
+    }
+    extItens = (data.cheques||[]).map(c => {
+      const valor = Number(c.valor)||0;
+      const cand = casarCheque(valor, c.data, c.numero);
+      return { ...c, valor, cheque_id: cand ? cand.id : null, usar: !!cand };
+    });
+    pintarExtrato();
+  }catch(e){
+    $("#ext-res").innerHTML = `<p class="erro">Erro: ${esc(String(e))}</p>`;
+    btn.disabled = false; btn.textContent = "🔍 Tentar de novo";
+  }
+}
+
+// acha o cheque em aberto que corresponde ao débito do extrato
+function casarCheque(valor, dataExtrato, numero){
+  const pend = state.cheques.filter(c => !c.compensado);
+  if(numero){
+    const porNum = pend.find(c => c.numero && String(c.numero).replace(/\D/g,"") === String(numero).replace(/\D/g,""));
+    if(porNum) return porNum;
+  }
+  const iguais = pend.filter(c => Math.abs((Number(c.valor)||0) - valor) < 0.02);
+  if(iguais.length === 1) return iguais[0];
+  if(iguais.length > 1 && dataExtrato){
+    // desempata pelo vencimento mais perto da data do extrato
+    return iguais.slice().sort((a,b) =>
+      Math.abs(diasEntre(bomParaDe(a), dataExtrato)) - Math.abs(diasEntre(bomParaDe(b), dataExtrato)))[0];
+  }
+  return iguais[0] || null;
+}
+
+function pintarCasamento(){
+  const achados = extItens.filter(i=>i.cheque_id).length;
+  const semPar  = extItens.filter(i=>!i.cheque_id);
+  const total   = extItens.filter(i=>i.usar).length;
+  const somaSel = extItens.filter(i=>i.usar).reduce((s,i)=>s+i.valor,0);
+  $("#ext-res").innerHTML = `
+    <div class="rotulo" style="margin-top:12px">${extItens.length} cheque(s) no extrato · ${achados} casaram</div>
+    ${extItens.map((it,i)=>{
+      const c = it.cheque_id ? state.cheques.find(x=>x.id===it.cheque_id) : null;
+      return `<label class="pf-chq" style="${c?"":"border-color:var(--vermelho);background:#fdecea"}">
+        ${c?`<input type="checkbox" class="ext-cb" data-exti="${i}" ${it.usar?"checked":""}>`:`<span style="width:20px">⚠️</span>`}
+        <span style="flex:1">
+          <b>${brl(it.valor)}</b> · ${it.data?dataBR(it.data):"sem data"}
+          ${it.duvida?` <span class="dv-tag">conferir</span>`:""}
+          <br><span style="font-size:.74rem;color:var(--tinta-mole)">${esc((it.descricao||"").slice(0,50))}</span>
+          ${c
+            ? `<br><span style="font-size:.78rem;color:var(--verde);font-weight:700">✓ ${esc(c.para)} · cai ${dataBR(bomParaDe(c))}${c.numero?` · nº ${esc(c.numero)}`:""}</span>`
+            : `<br><span style="font-size:.78rem;color:var(--vermelho);font-weight:700">não achei cheque em aberto com esse valor</span>`}
+        </span>
+      </label>`;
+    }).join("")}
+    ${semPar.length?`<p class="dica" style="color:var(--vermelho)">⚠️ ${semPar.length} não casaram — dê baixa na mão pela aba Cheques.</p>`:""}
+    ${total?`<button class="btn btn-primario" id="ext-baixar" style="background:var(--verde);margin-top:8px">✅ Dar baixa em ${total} cheque(s) — ${brl(somaSel)}</button>`:""}`;
+  $$("[data-exti]").forEach(cb => cb.onchange = () => { extItens[+cb.dataset.exti].usar = cb.checked; pintarCasamento(); });
+  if($("#ext-baixar")) armarConfirmacao($("#ext-baixar"), aplicarBaixasExtrato);
+}
+
+async function aplicarBaixasExtrato(){
+  const btn = $("#ext-baixar");
+  btn.disabled = true; btn.textContent = "Dando baixa…";
+  const alvo = extItens.filter(i=>i.usar && i.cheque_id);
+  const ids = alvo.map(i=>i.cheque_id);
+  const bak = ids.map(id => { const c = state.cheques.find(x=>x.id===id); return { id, compensado:c.compensado, compensado_em:c.compensado_em }; });
+  alvo.forEach(i => {
+    const c = state.cheques.find(x=>x.id===i.cheque_id);
+    if(c){ c.compensado = true; c.compensado_em = i.data || hoje(); }
+  });
+  // agrupa por data de compensação
+  const porData = {};
+  alvo.forEach(i => { const d = i.data || hoje(); (porData[d] = porData[d] || []).push(i.cheque_id); });
+  let erro = null;
+  for(const [d, lista] of Object.entries(porData)){
+    const { error } = await dbw("cheques").update({ compensado:true, compensado_em:d }).in("id", lista);
+    if(error) erro = error;
+  }
+  if(erro){
+    bak.forEach(b => { const c = state.cheques.find(x=>x.id===b.id); if(c) Object.assign(c, b); });
+    btn.disabled = false; btn.textContent = "✅ Tentar de novo";
+    refreshCheques(); toast("Erro ao dar baixa: "+(erro.message||"?"), true); return;
+  }
+  fecharModal();
+  refreshCheques(); renderInicio();
+  toast(`${alvo.length} cheque(s) baixado(s) pelo extrato! ✅`);
 }
 
 function renderCustos(){
