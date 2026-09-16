@@ -607,7 +607,7 @@ body.leitura.libera-baixa #btn-config{ display:inline-flex !important }
    ======================================================================= */
 const SUPABASE_URL      = "https://cadnmgaymgljmoadebkk.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uBKKvD_e5ef4326TvkFgcg_rRnjmTus";
-const APP_VER = "v149";
+const APP_VER = "v150";
 const SPLASH_MIN = 700;
 const EMAIL_ADMIN = "jpferreira1356@icloud.com";
 const splashT0 = Date.now();                              // suba junto com o cache do sw.js
@@ -4466,7 +4466,13 @@ function renderCustos(){
           <div class="nome">${esc(f.nome)}</div>
           <div class="preco" style="font-size:1rem">${brl(custoUn)}<span style="font-size:.7rem;color:var(--tinta-mole)">/${unid}</span></div>
         </div>
-        <div class="det">${(f.itens||[]).length} itens · rende ${num(rende)} ${unid} · custo total ${brl(custo)}</div>
+        <div class="det">${(f.itens||[]).length} itens · rende ${num(rende)} ${unid}${(Number(f.pecas)||0)>0?` (${num(f.pecas)} peças)`:""} · custo total ${brl(custo)}</div>
+        ${(Number(f.pecas)||0)>0 && (Number(f.preco_venda_peca)||0)>0 ? (()=>{
+          const pc = Number(f.pecas)||0, cpc = custo/pc, vpc = Number(f.preco_venda_peca)||0, lpc = vpc-cpc;
+          const okp = lpc>0;
+          return `<div style="font-size:.84rem;font-weight:700;color:${okp?"var(--verde)":"var(--vermelho)"}">
+            ${okp?"✅":"⚠️"} por peça: custo ${brl(cpc)} · venda ${brl(vpc)} → ${okp?"lucro":"PREJUÍZO"} ${brl(Math.abs(lpc))} (${(lpc/vpc*100).toFixed(0)}%)</div>`;
+        })() : ""}
         ${venda > 0
           ? `<div style="font-size:.84rem;font-weight:700;color:${cor}">
                ${ok ? "✅" : "⚠️"} venda ${brl(venda)}/${unid} → ${ok?"lucro":"PREJUÍZO"} ${brl(Math.abs(lucroUn))}/${unid} (${margem.toFixed(0)}% margem)
@@ -4496,6 +4502,13 @@ function abrirFicha(id){
     const lucroUn = venda - custoUn;
     const margem = venda > 0 ? (lucroUn/venda*100) : 0;
     const ok = lucroUn > 0;
+    const pecas = Number(f.pecas)||0;
+    const custoPc = pecas > 0 ? custo/pecas : 0;
+    const vendaPc = Number(f.preco_venda_peca)||0;
+    const lucroPc = vendaPc - custoPc;
+    const margemPc = vendaPc > 0 ? (lucroPc/vendaPc*100) : 0;
+    const okPc = lucroPc > 0;
+    const pesoPc = (pecas > 0 && rende > 0) ? rende/pecas : 0;
     const linhas = (f.itens||[]).map((it,i) => `
       <div class="pg-parc" style="padding:10px 12px">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
@@ -4527,6 +4540,7 @@ function abrirFicha(id){
         <div class="campo"><label>Rende quanto?</label><input id="fc-rende" type="text" inputmode="decimal" value="${f.rendimento??""}" placeholder="10"></div>
         <div class="campo"><label>Unidade</label><select id="fc-unid">${UNIDADES.map(u=>`<option value="${u}" ${f.unidade===u?"selected":""}>${u}</option>`).join("")}</select></div>
       </div>
+      <div class="campo"><label>Quantas peças saem dessa produção? <span style="font-weight:400;color:var(--tinta-mole)">(opcional)</span></label><input id="fc-pecas" type="text" inputmode="decimal" value="${f.pecas??""}" placeholder="ex.: 70"></div>
       <div class="rotulo" style="margin-top:10px">Itens do custo</div>
       <div id="fc-itens">${linhas || `<p class="dica">Nenhum item ainda. Adicione abaixo 👇</p>`}</div>
       <div style="display:flex;gap:6px;margin:8px 0">
@@ -4538,15 +4552,27 @@ function abrirFicha(id){
         <div style="font-size:.8rem;color:var(--tinta-mole)">Custo total da produção</div>
         <div style="font-family:'IBM Plex Mono',monospace;font-weight:700;font-size:1.3rem">${brl(custo)}</div>
         ${rende>0?`<div style="font-size:.86rem;color:var(--ouro-esc);font-weight:700">${brl(custoUn)} por ${unid}</div>`:`<div style="font-size:.78rem;color:var(--vermelho)">informe o rendimento pra calcular o custo por ${unid}</div>`}
+        ${pecas>0?`<div style="font-size:.86rem;color:var(--ouro-esc);font-weight:700">${brl(custoPc)} por peça <span style="font-weight:400;color:var(--tinta-mole)">(${pecas} peças${pesoPc>0?` · ${num(Math.round(pesoPc*1000))} g cada`:""})</span></div>`:""}
       </div>
-      <div class="campo"><label>Preço de venda (R$ por ${unid})</label><input id="fc-venda" type="text" inputmode="decimal" value="${f.preco_venda??""}" placeholder="0,00"></div>
+      <div class="linha-campos">
+        <div class="campo"><label>Venda por ${unid} (R$)</label><input id="fc-venda" type="text" inputmode="decimal" value="${f.preco_venda??""}" placeholder="0,00"></div>
+        ${pecas>0?`<div class="campo"><label>Venda por peça (R$)</label><input id="fc-vendapc" type="text" inputmode="decimal" value="${f.preco_venda_peca??""}" placeholder="0,00"></div>`:""}
+      </div>
       ${(venda>0 && rende>0) ? `
-        <div class="pg-alerta" style="margin-bottom:10px;border-color:${ok?"var(--verde)":"var(--vermelho)"};background:${ok?"#f0f7ec":"#fdecea"}">
-          <b style="color:${ok?"var(--verde)":"var(--vermelho)"};font-size:1rem">${ok?"✅ Dá lucro":"⚠️ Está no prejuízo"}</b><br>
+        <div class="pg-alerta" style="margin-bottom:8px;border-color:${ok?"var(--verde)":"var(--vermelho)"};background:${ok?"#f0f7ec":"#fdecea"}">
+          <b style="color:${ok?"var(--verde)":"var(--vermelho)"};font-size:1rem">${ok?"✅ Vendendo por "+unid+": dá lucro":"⚠️ Vendendo por "+unid+": prejuízo"}</b><br>
           Custo ${brl(custoUn)}/${unid} · venda ${brl(venda)}/${unid}<br>
           <b>${ok?"Lucro":"Perda"} de ${brl(Math.abs(lucroUn))} por ${unid}</b> · margem ${margem.toFixed(1)}%<br>
-          <span style="color:var(--tinta-mole)">Na produção toda: ${ok?"ganha":"perde"} <b>${brl(Math.abs(lucroUn*rende))}</b></span>
-          ${!ok?`<br><span style="color:var(--vermelho)">Pra empatar, venda a partir de <b>${brl(custoUn)}</b>/${unid}</span>`:""}
+          <span style="color:var(--tinta-mole)">Produção toda: ${ok?"ganha":"perde"} <b>${brl(Math.abs(lucroUn*rende))}</b></span>
+          ${!ok?`<br><span style="color:var(--vermelho)">Pra empatar: <b>${brl(custoUn)}</b>/${unid}</span>`:""}
+        </div>` : ""}
+      ${(vendaPc>0 && pecas>0) ? `
+        <div class="pg-alerta" style="margin-bottom:10px;border-color:${okPc?"var(--verde)":"var(--vermelho)"};background:${okPc?"#f0f7ec":"#fdecea"}">
+          <b style="color:${okPc?"var(--verde)":"var(--vermelho)"};font-size:1rem">${okPc?"✅ Vendendo por peça: dá lucro":"⚠️ Vendendo por peça: prejuízo"}</b><br>
+          Custo ${brl(custoPc)}/peça · venda ${brl(vendaPc)}/peça<br>
+          <b>${okPc?"Lucro":"Perda"} de ${brl(Math.abs(lucroPc))} por peça</b> · margem ${margemPc.toFixed(1)}%<br>
+          <span style="color:var(--tinta-mole)">Produção toda: ${okPc?"ganha":"perde"} <b>${brl(Math.abs(lucroPc*pecas))}</b>${pesoPc>0?` · equivale a ${brl(vendaPc/pesoPc)}/${unid}`:""}</span>
+          ${!okPc?`<br><span style="color:var(--vermelho)">Pra empatar: <b>${brl(custoPc)}</b>/peça</span>`:""}
         </div>` : ""}
       <div class="erro" id="fc-erro"></div>
       <button class="btn btn-primario" id="fc-salvar">Salvar ficha</button>
@@ -4558,12 +4584,20 @@ function abrirFicha(id){
       f.rendimento = calcExpr($("#fc-rende").value) || "";
       f.unidade = $("#fc-unid").value;
       f.preco_venda = calcExpr($("#fc-venda").value) || "";
+      f.pecas = calcExpr($("#fc-pecas").value) || "";
+      if($("#fc-vendapc")) f.preco_venda_peca = calcExpr($("#fc-vendapc").value) || "";
     };
     $("#fc-nome").oninput = () => { f.nome = $("#fc-nome").value; };
     $("#fc-rende").oninput = () => { f.rendimento = calcExpr($("#fc-rende").value) || ""; };
     $("#fc-unid").onchange = () => { lerCampos(); pintar(); };
     $("#fc-venda").oninput = () => { f.preco_venda = calcExpr($("#fc-venda").value) || ""; };
     $("#fc-venda").onchange = () => { lerCampos(); pintar(); };
+    $("#fc-pecas").oninput = () => { f.pecas = calcExpr($("#fc-pecas").value) || ""; };
+    $("#fc-pecas").onchange = () => { lerCampos(); pintar(); };
+    if($("#fc-vendapc")){
+      $("#fc-vendapc").oninput = () => { f.preco_venda_peca = calcExpr($("#fc-vendapc").value) || ""; };
+      $("#fc-vendapc").onchange = () => { lerCampos(); pintar(); };
+    }
     $("#fc-rende").onchange = () => { lerCampos(); pintar(); };
     $$("[data-itq]").forEach(el => el.onchange = () => { f.itens[+el.dataset.itq].qtd = calcExpr(el.value)||0; pintar(); });
     $$("[data-itu]").forEach(el => el.onchange = () => { f.itens[+el.dataset.itu].unidade = el.value; pintar(); });
