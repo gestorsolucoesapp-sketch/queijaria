@@ -607,7 +607,7 @@ body.leitura.libera-baixa #btn-config{ display:inline-flex !important }
    ======================================================================= */
 const SUPABASE_URL      = "https://cadnmgaymgljmoadebkk.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uBKKvD_e5ef4326TvkFgcg_rRnjmTus";
-const APP_VER = "v148";
+const APP_VER = "v149";
 const SPLASH_MIN = 700;
 const EMAIL_ADMIN = "jpferreira1356@icloud.com";
 const splashT0 = Date.now();                              // suba junto com o cache do sw.js
@@ -2697,8 +2697,11 @@ function renderRecebimento(){
   salvarCacheEstado();
   const LEITE_ABAS = [["apagar","A pagar"],["historico","Histórico"],["graficos","Gráficos"],["cheques","Cheques"]];
   const subnav = LEITE_ABAS.map(([k,r]) => `<a data-lab="${k}" class="${k===leiteAba?"ativo":""}">${r}</a>`).join("");
-  $("#view-leite").innerHTML = `<div class="subnav">${subnav}</div><div id="leite-corpo"></div>`;
+  $("#view-leite").innerHTML = `<div class="subnav">${subnav}</div>
+    ${(!soLeitura && leiteAba==="apagar") ? `<button type="button" class="btn btn-fantasma" id="leite-importar" style="width:100%;padding:11px;margin-bottom:10px;border-color:var(--azul);color:var(--azul);font-size:.9rem">📷 Importar folha por foto</button>` : ""}
+    <div id="leite-corpo"></div>`;
   $$("#view-leite .subnav a").forEach(a => a.onclick = () => { leiteAba = a.dataset.lab; renderRecebimento(); });
+  if($("#leite-importar")) $("#leite-importar").onclick = abrirImportador;
   const corpo = $("#leite-corpo");
   if(leiteAba === "apagar")    renderLeiteAPagar(corpo);
   else if(leiteAba === "historico") renderLeiteHistorico(corpo);
@@ -4260,6 +4263,176 @@ function unitInsumo(it){
 }
 function custoFicha(f){
   return (f.itens||[]).reduce((s,it)=> s + custoItem(it), 0);
+}
+
+/* ===================== 📷 IMPORTADOR DE FOLHA (foto) ===================== */
+let impFotos = [];   // {b64, nome}
+let impItens = [];   // lançamentos lidos
+
+function abrirImportador(){
+  if(bloqueiaLeitura()) return;
+  impFotos = []; impItens = [];
+  pintarImportador();
+}
+function pintarImportador(){
+  abrirFolha(`
+    <h2>📷 Importar folha de leite</h2>
+    <p class="dica" style="margin-top:-6px">Tire a foto da folha (ou escolha da galeria). A IA lê os lançamentos e você confere antes de salvar.</p>
+    <div style="display:flex;gap:6px;margin-bottom:10px">
+      <button type="button" class="btn btn-primario" id="imp-cam" style="flex:1;padding:12px">📷 Tirar foto</button>
+      <button type="button" class="btn btn-fantasma" id="imp-gal" style="flex:1;padding:12px">🖼️ Galeria</button>
+    </div>
+    <input type="file" id="imp-file-cam" accept="image/*" capture="environment" style="display:none">
+    <input type="file" id="imp-file-gal" accept="image/*" multiple style="display:none">
+    <div id="imp-fotos">${impFotos.length
+      ? `<div class="rotulo">${impFotos.length} foto${impFotos.length>1?"s":""}</div>
+         <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">
+           ${impFotos.map((f,i)=>`<div style="position:relative">
+             <img src="${f.b64}" style="width:74px;height:74px;object-fit:cover;border-radius:10px;border:1px solid var(--linha-forte)">
+             <button type="button" data-imprm="${i}" style="position:absolute;top:-6px;right:-6px;width:22px;height:22px;border-radius:50%;border:none;background:var(--vermelho);color:#fff;font-weight:800;cursor:pointer">✕</button>
+           </div>`).join("")}
+         </div>
+         <button type="button" class="btn btn-primario" id="imp-ler" style="background:var(--verde)">🔍 Ler ${impFotos.length>1?"as fotos":"a foto"}</button>`
+      : `<p class="dica">Nenhuma foto ainda. Pode mandar até 4 de uma vez.</p>`}</div>
+    <div id="imp-res"></div>
+    <button class="btn btn-fantasma" id="imp-fechar" style="margin-top:10px">Fechar</button>`);
+
+  $("#imp-fechar").onclick = fecharModal;
+  $("#imp-cam").onclick = () => $("#imp-file-cam").click();
+  $("#imp-gal").onclick = () => $("#imp-file-gal").click();
+  const pegar = (e) => {
+    const arqs = [...(e.target.files||[])];
+    let faltam = arqs.length;
+    if(!faltam) return;
+    arqs.forEach(a => comprimirFoto(a, b64 => {
+      impFotos.push({ b64, nome:a.name });
+      if(--faltam === 0) pintarImportador();
+    }));
+    e.target.value = "";
+  };
+  $("#imp-file-cam").onchange = pegar;
+  $("#imp-file-gal").onchange = pegar;
+  $$("[data-imprm]").forEach(b => b.onclick = () => { impFotos.splice(+b.dataset.imprm,1); pintarImportador(); });
+  if($("#imp-ler")) $("#imp-ler").onclick = lerFolhas;
+  if(impItens.length) pintarResultado();
+}
+
+// reduz a foto pra não estourar o limite de envio
+function comprimirFoto(arquivo, cb){
+  const fr = new FileReader();
+  fr.onload = () => {
+    const img = new Image();
+    img.onload = () => {
+      const max = 1600;
+      let { width:w, height:h } = img;
+      if(w > max || h > max){ const s = max/Math.max(w,h); w = Math.round(w*s); h = Math.round(h*s); }
+      const cv = document.createElement("canvas");
+      cv.width = w; cv.height = h;
+      cv.getContext("2d").drawImage(img, 0, 0, w, h);
+      cb(cv.toDataURL("image/jpeg", 0.75));
+    };
+    img.src = fr.result;
+  };
+  fr.readAsDataURL(arquivo);
+}
+
+async function lerFolhas(){
+  const btn = $("#imp-ler");
+  btn.disabled = true; btn.textContent = "Lendo… pode levar 1 minuto";
+  $("#imp-res").innerHTML = `<p class="dica">🤖 A IA está lendo a folha…</p>`;
+  try{
+    const { data: { session } } = await sb.auth.getSession();
+    const r = await fetch(SUPABASE_URL + "/functions/v1/ler-folha", {
+      method:"POST",
+      headers:{ "content-type":"application/json", "Authorization":"Bearer " + (session?.access_token||"") },
+      body: JSON.stringify({ imagens: impFotos.map(f=>f.b64) })
+    });
+    const data = await r.json().catch(()=>({}));
+    if(!r.ok || data.error){
+      $("#imp-res").innerHTML = `<p class="erro">Não consegui ler: ${esc(data.detalhe || data.error || "erro")}</p>`;
+      btn.disabled = false; btn.textContent = "🔍 Tentar de novo"; return;
+    }
+    impItens = (data.lancamentos||[]).map(l => ({
+      data: l.data, fornecedor: l.fornecedor, litros: Number(l.litros)||0,
+      duvida: !!l.duvida, obs: l.obs||"", usar: true
+    })).filter(l => l.data && l.fornecedor && l.litros > 0);
+    pintarImportador();
+  }catch(e){
+    $("#imp-res").innerHTML = `<p class="erro">Erro: ${esc(String(e))}</p>`;
+    btn.disabled = false; btn.textContent = "🔍 Tentar de novo";
+  }
+}
+
+function pintarResultado(){
+  const nomesForn = state.fornecedores.map(f=>f.nome);
+  const achaForn = (n) => state.fornecedores.find(f => normTxt(f.nome) === normTxt(n))
+                       || state.fornecedores.find(f => ehDoForn({para:f.nome}, n));
+  const dias = [...new Set(impItens.map(i=>i.data))].sort();
+  const nDuv = impItens.filter(i=>i.duvida && i.usar).length;
+  const nNovo = impItens.filter(i=>i.usar && !achaForn(i.fornecedor)).length;
+  const total = impItens.filter(i=>i.usar).length;
+  $("#imp-res").innerHTML = `
+    <div class="rotulo" style="margin-top:12px">Encontrei ${impItens.length} lançamentos em ${dias.length} dia${dias.length>1?"s":""}</div>
+    ${nDuv?`<div class="pg-alerta" style="margin-bottom:8px;border-color:var(--vermelho);background:#fdecea"><b style="color:var(--vermelho)">⚠️ ${nDuv} com dúvida</b> — vão entrar marcados em vermelho pra você conferir depois.</div>`:""}
+    ${nNovo?`<div class="pg-alerta" style="margin-bottom:8px"><b>${nNovo} fornecedor(es) novo(s)</b> serão cadastrados.</div>`:""}
+    ${dias.map(d => `
+      <div class="rotulo" style="margin:10px 0 4px">${dataBR(d)}</div>
+      ${impItens.map((it,i)=> it.data!==d ? "" : `
+        <label class="pf-chq" style="${it.duvida?'border-color:var(--vermelho);background:#fdecea':''}">
+          <input type="checkbox" class="imp-cb" data-impi="${i}" ${it.usar?"checked":""}>
+          <span style="flex:1">
+            <b>${esc(it.fornecedor)}</b>${!achaForn(it.fornecedor)?` <span style="font-size:.7rem;color:var(--azul)">novo</span>`:""}
+            · <input type="text" inputmode="decimal" data-impl="${i}" value="${it.litros}" style="width:70px;padding:4px 6px;border:1px solid var(--linha-forte);border-radius:8px;font-family:'IBM Plex Mono',monospace"> L
+            ${it.duvida?`<br><span style="font-size:.72rem;color:var(--vermelho)">⚠️ ${esc(it.obs||"conferir")}</span>`:""}
+          </span>
+        </label>`).join("")}
+    `).join("")}
+    <div class="campo" style="margin-top:12px"><label>Preço por litro (R$)</label><input id="imp-preco" type="text" inputmode="decimal" value="2,70"></div>
+    <button class="btn btn-primario" id="imp-salvar" style="background:var(--verde)">✅ Importar ${total} lançamentos</button>`;
+  $$("[data-impi]").forEach(c => c.onchange = () => { impItens[+c.dataset.impi].usar = c.checked; pintarResultado(); });
+  $$("[data-impl]").forEach(inp => inp.onchange = () => {
+    const i = +inp.dataset.impl;
+    impItens[i].litros = calcExpr(inp.value)||0;
+    impItens[i].duvida = false;          // você corrigiu = conferido
+    pintarResultado();
+  });
+  armarConfirmacao($("#imp-salvar"), gravarImportacao);
+}
+
+async function gravarImportacao(){
+  const btn = $("#imp-salvar");
+  btn.disabled = true; btn.textContent = "Importando…";
+  const preco = calcExpr($("#imp-preco").value) || 2.70;
+  const usar = impItens.filter(i=>i.usar);
+  // cadastra fornecedores que faltam
+  const novos = [];
+  for(const it of usar){
+    const jaTem = state.fornecedores.find(f => normTxt(f.nome) === normTxt(it.fornecedor))
+               || state.fornecedores.find(f => ehDoForn({para:f.nome}, it.fornecedor));
+    if(!jaTem && !novos.find(n => normTxt(n.nome) === normTxt(it.fornecedor))){
+      novos.push({ id:uid(), familia_id:familiaId, nome:it.fornecedor.trim(), prazo_pagamento:30 });
+    }
+  }
+  if(novos.length){
+    const { error } = await sb.from("fornecedores").insert(novos);
+    if(error){ btn.disabled=false; btn.textContent="✅ Importar"; toast("Erro ao cadastrar fornecedor: "+(error.message||"?"), true); return; }
+    novos.forEach(n => state.fornecedores.push(n));
+    ordenarPorNome(state.fornecedores);
+  }
+  const linhas = usar.map(it => {
+    const f = state.fornecedores.find(x => normTxt(x.nome) === normTxt(it.fornecedor))
+           || state.fornecedores.find(x => ehDoForn({para:x.nome}, it.fornecedor));
+    if(!f) return null;
+    return { id:uid(), familia_id:familiaId, fornecedor_id:f.id, data:it.data,
+             litros:it.litros, preco_litro:preco,
+             valor_total: Math.round(it.litros*preco*100)/100, pago:false, duvida: it.duvida };
+  }).filter(Boolean);
+  const { error } = await sb.from("recebimentos_leite").insert(linhas);
+  if(error){ btn.disabled=false; btn.textContent="✅ Importar"; toast("Erro ao importar: "+(error.message||"?"), true); return; }
+  fecharModal();
+  await carregarTudo();
+  renderRecebimento();
+  toast(`${linhas.length} lançamentos importados! ✅`);
 }
 
 function renderCustos(){
