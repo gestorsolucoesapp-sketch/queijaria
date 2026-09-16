@@ -606,7 +606,7 @@ body.leitura.libera-baixa #btn-config{ display:inline-flex !important }
    ======================================================================= */
 const SUPABASE_URL      = "https://cadnmgaymgljmoadebkk.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uBKKvD_e5ef4326TvkFgcg_rRnjmTus";
-const APP_VER = "v143";
+const APP_VER = "v144";
 const SPLASH_MIN = 700;
 const EMAIL_ADMIN = "jpferreira1356@icloud.com";
 const splashT0 = Date.now();                              // suba junto com o cache do sw.js
@@ -4344,11 +4344,30 @@ function abrirFicha(id){
     $$("[data-itp]").forEach(el => el.onchange = () => { f.itens[+el.dataset.itp].preco = calcExpr(el.value)||0; pintar(); });
     $$("[data-itrm]").forEach(b => b.onclick = () => { f.itens.splice(+b.dataset.itrm,1); pintar(); });
     $("#fc-add").onclick = () => {
-      const nome = prompt("Nome do item (ex.: Sal, Coalho, Embalagem, Gás, Mão de obra):");
-      if(nome === null) return;
-      if(!nome.trim()) return;
-      f.itens.push({ nome:nome.trim(), qtd:"", unidade:"kg", preco:"" });
-      pintar();
+      // campo inline no topo da lista (prompt do sistema fica ruim no iPhone)
+      const box = $("#fc-itens");
+      if($("#fc-novoitem")) { $("#fc-novoitem").focus(); return; }
+      const div = document.createElement("div");
+      div.className = "pg-parc";
+      div.style.cssText = "padding:10px 12px;border-color:var(--ouro)";
+      div.innerHTML = `<div class="campo" style="margin:0"><label>Nome do novo item</label>
+          <input id="fc-novoitem" placeholder="Sal, Coalho, Embalagem, Gás, Mão de obra…" autocomplete="off"></div>
+        <div style="display:flex;gap:6px;margin-top:8px">
+          <button type="button" class="btn btn-primario" id="fc-ni-ok" style="flex:1;padding:10px">Adicionar</button>
+          <button type="button" class="btn btn-fantasma" id="fc-ni-x" style="flex:1;padding:10px">Cancelar</button>
+        </div>`;
+      box.prepend(div);
+      const inp = div.querySelector("#fc-novoitem");
+      inp.focus();
+      const add = () => {
+        const nome = inp.value.trim();
+        if(!nome){ inp.focus(); return; }
+        f.itens.push({ nome, qtd:"", unidade:"kg", preco:"" });
+        pintar();
+      };
+      div.querySelector("#fc-ni-ok").onclick = add;
+      div.querySelector("#fc-ni-x").onclick = () => div.remove();
+      inp.addEventListener("keydown", e => { if(e.key === "Enter"){ e.preventDefault(); add(); } });
     };
     $("#fc-addleite").onclick = () => {
       if(f.itens.some(i=>i.leite)){ toast("O leite já está na ficha."); return; }
