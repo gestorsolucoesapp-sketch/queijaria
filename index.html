@@ -606,7 +606,7 @@ body.leitura.libera-baixa #btn-config{ display:inline-flex !important }
    ======================================================================= */
 const SUPABASE_URL      = "https://cadnmgaymgljmoadebkk.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uBKKvD_e5ef4326TvkFgcg_rRnjmTus";
-const APP_VER = "v145";
+const APP_VER = "v146";
 const SPLASH_MIN = 700;
 const EMAIL_ADMIN = "jpferreira1356@icloud.com";
 const splashT0 = Date.now();                              // suba junto com o cache do sw.js
@@ -1561,8 +1561,9 @@ function feriadosDoAno(ano){
 let agMes = hoje().slice(0,7);   // "AAAA-MM" exibido
 let agDia = hoje();              // dia selecionado
 function agTarefas(){ state.config = state.config || {}; if(!Array.isArray(state.config.agenda)) state.config.agenda = []; return state.config.agenda; }
-function agSalvar(){
-  dbw("queijaria_config").upsert({ familia_id:familiaId, agenda: agTarefas() }).then(()=>{}, ()=>{});
+async function agSalvar(){
+  const { error } = await dbw("queijaria_config").upsert({ familia_id:familiaId, agenda: agTarefas() });
+  if(error) toast("⚠️ NÃO salvou no banco: "+(error.message||"erro"), true);
 }
 function abrirAgenda(){
   const [ano, mes] = agMes.split("-").map(Number);
@@ -4196,7 +4197,11 @@ function vazioCad(txt){ return `<div class="vazio"><div>${txt}</div></div>`; }
 /* ===================== 💰 CUSTOS / FICHA TÉCNICA ===================== */
 const UNIDADES = ["kg","L","un","g","ml","cx","pct"];
 function fichas(){ state.config = state.config || {}; if(!Array.isArray(state.config.fichas)) state.config.fichas = []; return state.config.fichas; }
-function fichasSalvar(){ dbw("queijaria_config").upsert({ familia_id:familiaId, fichas: fichas() }).then(()=>{}, ()=>{}); }
+async function fichasSalvar(){
+  const { error } = await dbw("queijaria_config").upsert({ familia_id:familiaId, fichas: fichas() });
+  if(error){ toast("⚠️ NÃO salvou no banco: "+(error.message||"erro"), true); return false; }
+  return true;
+}
 
 // preço médio REAL do litro, pelo que foi pago de fato nos últimos 60 dias
 function precoLeiteReal(){
@@ -4426,8 +4431,11 @@ function abrirFicha(id){
       lerCampos();
       if(!f.nome){ $("#fc-erro").textContent = "Dê um nome pro produto."; return; }
       if(!editando && !fichas().some(x=>x.id===f.id)) fichas().push(f);
-      fichasSalvar(); fecharModal(); renderCustos();
-      toast(editando ? "Ficha atualizada. ✅" : "Ficha criada. ✅");
+      fichasSalvar().then(ok => {
+        if(!ok) return;                       // erro já avisado; não fecha, não perde o que digitou
+        fecharModal(); renderCustos();
+        toast(editando ? "Ficha atualizada. ✅" : "Ficha criada. ✅");
+      });
     });
   };
   pintar();
