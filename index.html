@@ -356,6 +356,7 @@ body.leitura.libera-baixa #btn-config{ display:inline-flex !important }
 .calc-eq{background:var(--ouro);color:#fff;border-color:var(--ouro)}
 .pg-parc{border:1px solid var(--linha-forte);border-radius:12px;padding:10px 12px;margin-bottom:8px;background:var(--card)}
 .pg-parc-cab{display:flex;justify-content:space-between;align-items:center;font-size:.8rem;color:var(--ouro-esc);margin-bottom:6px}
+.dv-tag{display:inline-block;background:var(--vermelho);color:#fff;font-size:.62rem;font-weight:800;padding:1px 6px;border-radius:20px;vertical-align:middle}
 .pg-parc-x{border:none;background:none;color:var(--vermelho);font-size:.76rem;font-weight:700;font-family:inherit;cursor:pointer;padding:0}
 .cal-ov{position:fixed;inset:0;z-index:999;background:rgba(46,42,36,.5);display:grid;place-items:center;padding:16px}
 .cal-box{background:var(--card);border-radius:18px;padding:16px;width:min(92vw,400px);box-shadow:0 18px 50px rgba(0,0,0,.3)}
@@ -606,7 +607,7 @@ body.leitura.libera-baixa #btn-config{ display:inline-flex !important }
    ======================================================================= */
 const SUPABASE_URL      = "https://cadnmgaymgljmoadebkk.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uBKKvD_e5ef4326TvkFgcg_rRnjmTus";
-const APP_VER = "v147";
+const APP_VER = "v148";
 const SPLASH_MIN = 700;
 const EMAIL_ADMIN = "jpferreira1356@icloud.com";
 const splashT0 = Date.now();                              // suba junto com o cache do sw.js
@@ -2897,7 +2898,7 @@ function abrirGrupoRecebimentos(g){
       return `<div class="tipo" style="padding:10px 12px;align-items:center">
         <div style="flex:1">
           <div class="nome" style="font-size:.85rem">${dataBR(d)}</div>
-          <div class="det">${num(r.litros)} L × ${brl(r.preco_litro)}/L</div>
+          <div class="det">${r.duvida?`<span class="dv-tag">⚠️ conferir</span> `:""}<span${r.duvida?' style="color:var(--vermelho);font-weight:800"':''}>${num(r.litros)} L</span> × ${brl(r.preco_litro)}/L</div>
         </div>
         <div class="preco" style="margin-right:6px">${brl(r.valor_total)}</div>
         ${acoes(r)}
@@ -2906,7 +2907,7 @@ function abrirGrupoRecebimentos(g){
     // vários no mesmo dia: cabeçalho + itens
     const filhos = x.itens.map(r => `
       <div class="tipo sub-ent" style="display:flex;padding:8px 12px;margin-left:14px;align-items:center">
-        <div style="flex:1"><div class="det">${num(r.litros)} L × ${brl(r.preco_litro)}/L</div></div>
+        <div style="flex:1"><div class="det">${r.duvida?`<span class="dv-tag">⚠️ conferir</span> `:""}<span${r.duvida?' style="color:var(--vermelho);font-weight:800"':''}>${num(r.litros)} L</span> × ${brl(r.preco_litro)}/L</div></div>
         <div class="preco" style="font-size:.8rem;margin-right:6px">${brl(r.valor_total)}</div>
         ${acoes(r)}
       </div>`).join("");
@@ -3679,7 +3680,7 @@ async function salvarRecebimento(id){
   const manual = calcExpr($("#r-preco").value);
   const preco_litro = (!isNaN(manual) && manual > 0) ? manual : precoLitroPara(litros);
   if(preco_litro <= 0){ $("#r-erro").textContent = `Sem preço pra ${num(litros)} L. Digite o preço por litro, ou cadastre a faixa em Cadastro › Leite.`; return; }
-  const dados = { fornecedor_id, data, litros, preco_litro, valor_total: Math.round(litros*preco_litro*100)/100 };
+  const dados = { fornecedor_id, data, litros, preco_litro, valor_total: Math.round(litros*preco_litro*100)/100, duvida:false };
   if(id){
     const r = state.recebimentos.find(x=>x.id===id);
     if(!r){ fecharModal(); toast("Registro não encontrado. Recarregue o app.", true); return; }
