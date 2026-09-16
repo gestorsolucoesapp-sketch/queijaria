@@ -606,7 +606,7 @@ body.leitura.libera-baixa #btn-config{ display:inline-flex !important }
    ======================================================================= */
 const SUPABASE_URL      = "https://cadnmgaymgljmoadebkk.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uBKKvD_e5ef4326TvkFgcg_rRnjmTus";
-const APP_VER = "v146";
+const APP_VER = "v147";
 const SPLASH_MIN = 700;
 const EMAIL_ADMIN = "jpferreira1356@icloud.com";
 const splashT0 = Date.now();                              // suba junto com o cache do sw.js
@@ -1356,12 +1356,28 @@ function ehErroRede(err){
   const m = ((err && (err.message||err.details))||"").toString().toLowerCase();
   return !navigator.onLine || m.includes("fetch") || m.includes("network") || m.includes("failed to");
 }
+// registra que o id foi apagado DE PROPÓSITO (senão o resgate acha que foi perda e traz de volta)
+function marcarApagado(tabela, ids){
+  const lista = (Array.isArray(ids) ? ids : [ids]).filter(Boolean);
+  if(!lista.length || !familiaId) return;
+  try {
+    sb.from("apagados").upsert(lista.map(id => ({ id, familia_id: familiaId, tabela })), { onConflict:"id" })
+      .then(()=>{}, ()=>{});
+  } catch(e){}
+}
 function dbw(table){
   return {
     insert(vals){ return _dispatch({ table, op:"insert", vals }); },
     upsert(vals){ return _dispatch({ table, op:"upsert", vals }); },
     update(vals){ return _cond(table,"update",vals); },
-    delete(){ return _cond(table,"delete",null); }
+    delete(){
+      const alvo = _cond(table,"delete",null);
+      return {
+        eq(col,val){ if(col==="id") marcarApagado(table,[val]); return alvo.eq(col,val); },
+        in(col,vals){ if(col==="id") marcarApagado(table,vals); return alvo.in(col,vals); },
+        ...alvo
+      };
+    }
   };
 }
 function _cond(table,op,vals){
@@ -1459,6 +1475,17 @@ async function carregarTudo(){
     try { copia = JSON.parse(localStorage.getItem(ESTADO_KEY) || "null"); } catch(e){}
   }
   if(copia){
+    // ids apagados de propósito — não são "perda", não podem virar resgate nem voltar
+    let idsApagados = new Set();
+    try {
+      const { data: apg } = await sb.from("apagados").select("id").eq("familia_id", familiaId);
+      if(apg) idsApagados = new Set(apg.map(a => a.id));
+    } catch(e){}
+    if(idsApagados.size){
+      MAPA_BK.forEach(([k]) => {
+        if(Array.isArray(copia[k])) copia[k] = copia[k].filter(x => !(x && idsApagados.has(x.id)));
+      });
+    }
     const faltando = {};
     let nFalta = 0;
     MAPA_BK.forEach(([k]) => {
