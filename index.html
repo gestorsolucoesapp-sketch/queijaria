@@ -607,7 +607,7 @@ body.leitura.libera-baixa #btn-config{ display:inline-flex !important }
    ======================================================================= */
 const SUPABASE_URL      = "https://cadnmgaymgljmoadebkk.supabase.co";
 const SUPABASE_ANON_KEY = "sb_publishable_uBKKvD_e5ef4326TvkFgcg_rRnjmTus";
-const APP_VER = "v152";
+const APP_VER = "v153";
 const SPLASH_MIN = 700;
 const EMAIL_ADMIN = "jpferreira1356@icloud.com";
 const splashT0 = Date.now();                              // suba junto com o cache do sw.js
@@ -4333,13 +4333,13 @@ function comprimirFoto(arquivo, cb){
   fr.onload = () => {
     const img = new Image();
     img.onload = () => {
-      const max = 1600;
+      const max = 1900;
       let { width:w, height:h } = img;
       if(w > max || h > max){ const s = max/Math.max(w,h); w = Math.round(w*s); h = Math.round(h*s); }
       const cv = document.createElement("canvas");
       cv.width = w; cv.height = h;
       cv.getContext("2d").drawImage(img, 0, 0, w, h);
-      cb(cv.toDataURL("image/jpeg", 0.75));
+      cb(cv.toDataURL("image/jpeg", 0.82));
     };
     img.src = fr.result;
   };
